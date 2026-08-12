@@ -1,5 +1,29 @@
 
-## 🎯 REVISIÓN PRE-DESPLIEGUE + PRIMERA VERSIÓN 0.1 SUBIDA A GIT - `miércoles, 12 de agosto de 2026`
+
+## 🔧 DESPLIEGUE PREPARADO: CONFIGURACIÓN VÍA `.env` (pasos pre-despliegue listos) - `miércoles, 12 de agosto de 2026`
+
+### Objetivo
+Dejar listos los pasos previos al despliegue (antes solo documentados) para que en el servidor de producción sea
+"clonar → crear `.env` → `docker compose up -d --build`" sin editar código ni secretos hardcodeados.
+
+### Cambios
+- ✅ **`.env.example` raíz** nuevo: documenta TODAS las variables del despliegue (`POSTGRES_*`, `JWT_SECRET`,
+  `SEED_ADMIN_*`, `SEED_EVALUADOR_*`, `VITE_API_URL`) con comentarios y comando `openssl rand -base64 48` para el secreto.
+- ✅ **`docker-compose.yml` parametrizado**: todos los secretos dejaron de estar hardcodeados y se inyectan desde `.env`
+  con valores por defecto de desarrollo (`${VAR:-default}`). `DATABASE_URL` se construye con las credenciales del `.env`.
+- ✅ **`backend/prisma/seed.ts`**: las credenciales iniciales de admin/evaluador ahora se leen de
+  `SEED_ADMIN_EMAIL/PASSWORD` y `SEED_EVALUADOR_EMAIL/PASSWORD` (con los valores de dev como fallback). Solo corre la primera vez.
+- ✅ **`JWT_SECRET` obligatorio (fail-fast)**: se eliminó el fallback hardcodeado (`tu_secreto_super_secreto_aqui`)
+  de `auth.module.ts` y `jwt.strategy.ts`. El backend **no arranca** si `JWT_SECRET` no está definido (evita tokens falsificables).
+- ✅ **`dotenv`** instalado en backend y cargado en `main.ts` (`import 'dotenv/config'`): el backend local ya lee su `.env`
+  (antes solo Prisma lo leía), y en docker las variables del compose tienen prioridad.
+- ✅ **README actualizado**: sección "Despliegue en Producción" ahora es copy-paste (clonar → `cp .env.example .env` →
+  `openssl rand -base64 48` → editar credenciales → `docker compose up -d --build`), con acceso inicial y notas de red/HTTPS.
+
+### Verificación
+- ✅ Backend: **59/59 tests** | Frontend: typecheck + `vite build` OK | `docker compose config` válido.
+- ⚠️ Recordatorio al desplegar: `POSTGRES_PASSWORD` debe ser alfanumérica (sin `@ : / #`) para no romper `DATABASE_URL`.
+
 
 ### Objetivo
 Revisar el estado del proyecto antes de subir la v0.1 a `git@github.com:megaman0012/PSICOMETRICO.git` para clonarlo en el servidor de producción y hacer pruebas reales.

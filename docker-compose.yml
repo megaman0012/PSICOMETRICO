@@ -4,9 +4,9 @@ services:
     container_name: psicometrico-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: psicometrico
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-psicometrico}
     ports:
       - "5433:5432"
     volumes:
@@ -25,9 +25,13 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/psicometrico?schema=public
-      JWT_SECRET: tu_secreto_super_secreto_aqui_cambialo_en_produccion
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-psicometrico}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
       PORT: 3000
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@psicometrico.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
+      SEED_EVALUADOR_EMAIL: ${SEED_EVALUADOR_EMAIL:-evaluador@psicometrico.com}
+      SEED_EVALUADOR_PASSWORD: ${SEED_EVALUADOR_PASSWORD:-Evaluador123!}
     ports:
       - "3021:3000"
     volumes:
@@ -42,7 +46,7 @@ services:
     depends_on:
       - backend
     environment:
-      VITE_API_URL: http://localhost:3021
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3021}
     ports:
       - "5173:5173"
     volumes:

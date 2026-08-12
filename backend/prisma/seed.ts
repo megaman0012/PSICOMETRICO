@@ -3,6 +3,12 @@ import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// Credenciales iniciales configurables (en producción vienen del .env del compose)
+const SEED_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || "admin@psicometrico.com";
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "Admin123!";
+const SEED_EVALUADOR_EMAIL = process.env.SEED_EVALUADOR_EMAIL || "evaluador@psicometrico.com";
+const SEED_EVALUADOR_PASSWORD = process.env.SEED_EVALUADOR_PASSWORD || "Evaluador123!";
+
 // ============================================================
 // ÍTEMS REALES DE CADA PRUEBA (datos, no placeholders)
 // ============================================================
@@ -399,12 +405,12 @@ async function main() {
   // =============================================
   console.log("Creando usuarios del sistema...");
 
-  const adminPassword = await bcrypt.hash("Admin123!", 10);
-  const evaluadorPassword = await bcrypt.hash("Evaluador123!", 10);
+  const adminPassword = await bcrypt.hash(SEED_ADMIN_PASSWORD, 10);
+  const evaluadorPassword = await bcrypt.hash(SEED_EVALUADOR_PASSWORD, 10);
 
   const admin = await prisma.usuario.create({
     data: {
-      email: "admin@psicometrico.com",
+      email: SEED_ADMIN_EMAIL,
       password: adminPassword,
       nombre: "Administrador",
       rol: "ADMIN",
@@ -413,7 +419,7 @@ async function main() {
 
   const evaluador = await prisma.usuario.create({
     data: {
-      email: "evaluador@psicometrico.com",
+      email: SEED_EVALUADOR_EMAIL,
       password: evaluadorPassword,
       nombre: "Evaluador Principal",
       rol: "EVALUADOR",
@@ -741,8 +747,8 @@ async function main() {
   console.log("Proceso de seed completado exitosamente");
   console.log("=============================================");
   console.log("CREDENCIALES DE ACCESO:");
-  console.log("  Admin:     admin@psicometrico.com / Admin123!");
-  console.log("  Evaluador: evaluador@psicometrico.com / Evaluador123!");
+  console.log(`  Admin:     ${SEED_ADMIN_EMAIL} / ${SEED_ADMIN_PASSWORD}`);
+  console.log(`  Evaluador: ${SEED_EVALUADOR_EMAIL} / ${SEED_EVALUADOR_PASSWORD}`);
   console.log("=============================================");
 }
 

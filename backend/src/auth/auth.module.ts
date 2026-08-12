@@ -8,11 +8,15 @@ import { RolesGuard } from './roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET no está definido. Configúrelo en el archivo .env antes de arrancar el backend.');
+}
+
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'tu_secreto_super_secreto_aqui',
+      secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '60m' },
     }),
   ],

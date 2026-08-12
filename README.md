@@ -119,26 +119,52 @@ Sistema para administrar, calificar y analizar pruebas psicométricas para candi
 
 ## Variables de Entorno
 
+Todos los valores sensibles del despliegue se configuran desde un único archivo `.env` en la raíz del proyecto
+(consulte `.env.example` para ver las variables con su descripción). El `docker-compose.yml` los inyecta
+automáticamente; el backend carga su `.env` con `dotenv` y el seed los usa para crear los usuarios iniciales.
+
 ### Backend
 - `DATABASE_URL`: URL de conexión a PostgreSQL
-- `JWT_SECRET`: secreto para firmar los tokens JWT (usar uno fuerte en producción)
+- `JWT_SECRET`: secreto para firmar los tokens JWT. **Requerido** (el backend no arranca sin él)
 - `PORT`: puerto del backend (por defecto `3000`)
+- `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_EVALUADOR_EMAIL`, `SEED_EVALUADOR_PASSWORD`: credenciales de los usuarios iniciales del seed
+
+### PostgreSQL
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`: credenciales y nombre de la base (la contraseña debe ser alfanumérica)
 
 ### Frontend
 - `VITE_API_URL`: URL pública del backend API
 
 ## Despliegue en Producción
 
-Para entornos productivos (o pruebas reales en un servidor):
+```bash
+# 1. Clonar el repositorio en el servidor
+git clone git@github.com:megaman0012/PSICOMETRICO.git && cd PSICOMETRICO
 
-1. **Cambie `JWT_SECRET`** en `docker-compose.yml` (o en las variables de entorno) por un valor aleatorio y fuerte:
-   ```bash
-   openssl rand -base64 48
-   ```
-2. **Cambie las credenciales de PostgreSQL** (`POSTGRES_PASSWORD`) en `docker-compose.yml`.
-3. **Cambie las contraseñas por defecto del seed** en `backend/prisma/seed.ts` o cree usuarios propios desde `/usuarios`.
-4. Si accede desde otro equipo, ajuste `VITE_API_URL` a la URL pública del backend y exponga los puertos correspondientes.
-5. Recomendado detrás de un proxy (Nginx/Traefik) con **HTTPS** para producción definitiva.
+# 2. Crear la configuración desde la plantilla
+cp .env.example .env
+
+# 3. Generar un JWT_SECRET seguro y pegarlo en el .env
+openssl rand -base64 48
+
+# 4. Editar el .env y cambiar: JWT_SECRET, POSTGRES_PASSWORD,
+#    SEED_ADMIN_PASSWORD y SEED_EVALUADOR_PASSWORD (deje las URLs de acceso listas)
+
+# 5. Levantar los servicios
+docker compose up -d --build
+```
+
+La base se inicializa sola la primera vez (migraciones + seed con las credenciales del `.env`).
+El seed solo corre cuando la base está vacía, así que los datos no se pierden al reiniciar.
+
+### Acceso inicial
+- App: `http://<servidor>:5173` | API: `http://<servidor>:3021`
+- Usuario administrador: el `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` configurados
+- Usuario evaluador: el `SEED_EVALUADOR_EMAIL` / `SEED_EVALUADOR_PASSWORD` configurados
+
+### Notas
+- Si accede desde otro equipo, ponga en `VITE_API_URL` la IP/dominio público del servidor (`http://IP:3021`) y abra los puertos 5173/3021.
+- Recomendado detrás de un proxy (Nginx/Traefik) con **HTTPS** para producción definitiva.
 
 ## Licencia
 
