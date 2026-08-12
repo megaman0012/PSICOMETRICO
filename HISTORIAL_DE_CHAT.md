@@ -1,5 +1,27 @@
 
 
+## ✅ CIERRE DE CASO - PROYECTO PSICOMÉTRICO v0.1 LISTA PARA DESPLIEGUE - `miércoles, 12 de agosto de 2026`
+
+### Estado final del proyecto
+- 🎯 **v0.1 publicada** en `git@github.com:megaman0012/PSICOMETRICO.git` (rama `main`).
+- ✅ Funcionalidad completa: las 3 pruebas reales (Big Five 20 ítems IPIP, Integridad 20 situaciones, Aptitudes 10), motor genérico de calificación 0-100, roles ADMIN/EVALUADOR, historial por candidato, reportes CSV/PDF, CRUD de pruebas desde `/admin-pruebas` (solo ADMIN), barra de progreso sticky con "Pregunta X de Y" y etiquetas Likert.
+- ✅ Despliegue preparado: configuración 100% vía `.env` (ver `.env.example`), sin secretos hardcodeados, `JWT_SECRET` obligatorio, seed idempotente, `docker compose up -d --build`.
+- ✅ Verificación final: **59/59 tests** backend, typecheck + build frontend OK, `docker compose config` válido, e2e CRUD/estado/roles OK.
+
+### Pendientes documentados para producción (no bloquean la v0.1)
+- Cambiar `JWT_SECRET` (`openssl rand -base64 48`), `POSTGRES_PASSWORD` (alfanumérica) y credenciales del seed en el `.env` del servidor.
+- Recomendado: proxy (Nginx/Traefik) con HTTPS, code-splitting de Recharts (bundle 655 kB) y modo build en vez de `start:dev` en compose de producción.
+
+### Deuda técnica / backlog futuro
+- Cifrado en tránsito y reposo de datos personales de candidatos (RGPD/local).
+- Auditoría de intentos y token de aplicación para flujo autoservicio del candidato.
+- Estandarización/validación psicométrica de umbrales con datos reales.
+
+### Cierre
+El caso queda **cerrado y guardado**. El proyecto queda en `/home/server-gea/Documentos/psicometrico/` y en GitHub listo para clonar en el servidor de producción y hacer pruebas reales.
+
+---
+
 ## 🔧 DESPLIEGUE PREPARADO: CONFIGURACIÓN VÍA `.env` (pasos pre-despliegue listos) - `miércoles, 12 de agosto de 2026`
 
 ### Objetivo
