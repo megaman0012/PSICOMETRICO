@@ -1,4 +1,47 @@
 
+## 🎯 REVISIÓN PRE-DESPLIEGUE + PRIMERA VERSIÓN 0.1 SUBIDA A GIT - `miércoles, 12 de agosto de 2026`
+
+### Objetivo
+Revisar el estado del proyecto antes de subir la v0.1 a `git@github.com:megaman0012/PSICOMETRICO.git` para clonarlo en el servidor de producción y hacer pruebas reales.
+
+### Revisión de coherencia
+- ✅ **Idea de negocio acorde**: la plataforma cumple exactamente el objetivo — aplicar/calificar/analizar las 3 pruebas reales (Big Five, Integridad, Aptitudes) para candidatos a Guardia de Seguridad, con motor genérico para agregar pruebas sin tocar código, rol ADMIN/EVALUADOR, historial por candidato y reportes CSV/PDF.
+- ✅ **Documentación coherente**: `README.md`, `documentación_tecnica.md` y `HISTORIAL_DE_CHAT.md` coinciden con el código. Se **actualizó el README**: ruta `/admin-pruebas`, endpoints de CRUD de pruebas (`POST/PUT/DELETE /pruebas`, `PATCH /pruebas/:id/estado`, `GET /pruebas/todas`) y variable `JWT_SECRET` en la sección de entorno, más una sección nueva **"Despliegue en Producción"** (cambiar `JWT_SECRET`, credenciales de PostgreSQL, contraseñas del seed y HTTPS con proxy).
+
+### Limpieza del código (preparación para el clon en producción)
+- ✅ **`.gitignore` raíz** creado (node_modules, dist, .env, *.db, *.zip, logs, etc.). El zip de 165 MB (`Psicosometrico1.zip`) y la carpeta duplicada `psicosometrico/` quedaron fuera del repo.
+- ✅ **`.env.example`** en backend y frontend (los `.env` reales quedan ignorados: nunca subir secretos).
+- ✅ **`.dockerignore`** actualizado para no copiar `.env` ni `dist` a las imágenes.
+- ✅ **Basura eliminada**: carpeta duplicada `psicosometrico/` (copia vieja del zip), `backend/prisma/dev.db` y `.env.sqlite.backup` (restos de la era SQLite), `.gitkeep` vacíos.
+- ⚠️ **Problema del entorno local corregido**: los `node_modules` del host estaban incompletos y con permisos `000` (heredados de la restauración del zip), por lo que `jest`/`tsc` no corrían. Se reconstruyeron con `npm ci` en backend y frontend.
+
+### Verificación final
+- ✅ Backend: **59/59 tests** en 8 suites (`npm test`).
+- ✅ Frontend: `npm run build` = typecheck + `vite build` correctos (655 kB, advertencia de Recharts documentada como pendiente de code-splitting).
+- ✅ Contenedores sanos: `GET /health` → `{"status":"OK"}`, frontend `:5173` → 200.
+- ✅ Acceso SSH a GitHub autenticado (`megaman0012`).
+
+### Versión 0.1 en Git
+- ✅ `git init` (rama `main`), commit **`3d38855` "v0.1: Plataforma psicométrica..."** (98 archivos, 21.081 líneas).
+- ✅ Push a `origin/main` (`git@github.com:megaman0012/PSICOMETRICO.git`) completado.
+- ✅ Repo en: https://github.com/megaman0012/PSICOMETRICO
+
+### Flujo de trabajo de la plataforma (cómo se usa)
+1. **Login** → el evaluador/administrador entra con su usuario (`admin@psicometrico.com` / `Admin123!` o `evaluador@psicometrico.com` / `Evaluador123!`).
+2. **Registrar candidato** (`/candidatos`): nombre, apellido, cédula, email, teléfono y cargo postulado.
+3. **Aplicar prueba** (`/aplicar`): asistente de 4 pasos → elegir candidato + prueba → responder preguntas por dimensión (Likert etiquetado 1=Muy en desacuerdo…5=Muy de acuerdo, o múltiple con opciones de texto; barra de progreso sticky con "Pregunta X de Y") → guardar → finalizar y calificar.
+4. **Ver resultados** (`/resultados`): puntuación por dimensión (0-100), clasificación (Alta/Media/Baja o equivalente), interpretación, gráfica y **informe psicométrico** descargable en **CSV/PDF**.
+5. **Historial** (`/historial`): todas las aplicaciones de un candidato en el tiempo (re-aplicación incrementa `numeroIntento`).
+6. **Reportes** (`/reportes`): resumen estadístico global y exportación CSV/PDF.
+7. **Admin** (`/usuarios`, `/admin-pruebas`): crear usuarios, y crear/editar/activar/desactivar/eliminar pruebas sin perder datos (solo ADMIN).
+
+### Notas para producción
+- En el servidor: cambiar `JWT_SECRET` (generar con `openssl rand -base64 48`), la contraseña de PostgreSQL y las credenciales por defecto del seed.
+- Recomendado Nginx/Traefik con HTTPS delante del frontend.
+- Pendiente futuro: code-splitting (Recharts) y modo build de producción en Docker (hoy el compose usa `start:dev` con watch).
+
+---
+
 ## ⚡ QUICK WINS + ETIQUETAS LIKERT + ADMIN DE PRUEBAS (CRUD FRONTEND) - `miércoles, 12 de agosto de 2026`
 
 Plan trabajado: A) Quick wins, B) Preguntas reales, C) CRUD de pruebas.
