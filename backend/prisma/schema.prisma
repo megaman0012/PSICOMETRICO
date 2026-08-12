@@ -1,0 +1,207 @@
+// Prisma Schema for Psicométrico Platform
+// Este esquema define el modelo de datos para la plataforma de pruebas psicométricas
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tipo de agregación para dimensiones: SUMA o PROMEDIO
+enum TipoAgregacion {
+  SUMA
+  PROMEDIO
+}
+
+// Modelo para las pruebas psicométricas
+model Prueba {
+  id            Int      @id @default(autoincrement())
+  nombre        String   @unique
+  descripcion   String?
+  version       String   @default("1.0")
+  activa        Boolean  @default(true)
+  fechaCreacion DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  
+  dimensiones   Dimension[]
+  preguntas     Pregunta[]
+  resultadosGlobales ResultadoGlobal[]
+  umbrales      UmbralClasificacion[]
+  aplicaciones  Aplicacion[]
+}
+
+// Modelo para las dimensiones/categorías de las pruebas
+model Dimension {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  descripcion   String?
+  pruebaId      Int
+  prueba        Prueba   @relation(fields: [pruebaId], references: [id])
+  orden         Int      @default(0)
+  // Tipo de agregación: SUMA (para sumar puntos) o PROMEDIO (para promediar valores Likert)
+  tipoAgregacion TipoAgregacion @default(SUMA)
+  
+  preguntas     Pregunta[]
+  resultadosDimension ResultadoDimension[]
+  umbrales      UmbralClasificacion[]
+  
+  @@index([pruebaId])
+  @@unique([pruebaId, nombre])
+}
+
+// Modelo para las preguntas
+model Pregunta {
+  id            Int      @id @default(autoincrement())
+  enunciado     String
+  tipo          String  // LIKERT o OPCION_MULTIPLE
+  pruebaId      Int
+  prueba        Prueba   @relation(fields: [pruebaId], references: [id])
+  dimensionId   Int
+  dimension     Dimension? @relation(fields: [dimensionId], references: [id])
+  orden         Int      @default(0)
+  
+  opciones      OpcionRespuesta[]
+  respuestas    Respuesta[]
+  @@index([pruebaId])
+  @@index([dimensionId])
+}
+
+
+
+// Modelo para las opciones de respuesta
+model OpcionRespuesta {
+  id            Int      @id @default(autoincrement())
+  texto         String
+  valor         Decimal  // Valor numérico de la opción (1-5 para Likert, puntos para múltiple elección)
+  esCorrecta    Boolean  // Solo relevante para preguntas de opción múltiple
+  preguntaId    Int
+  pregunta      Pregunta @relation(fields: [preguntaId], references: [id])
+  
+  respuestas    Respuesta[]
+  @@index([preguntaId])
+}
+
+// Modelo para los umbrales de clasificación
+model UmbralClasificacion {
+  id            Int      @id @default(autoincrement())
+  nombre        String   // Ej: Alta, Media, Baja
+  descripcion   String?
+  puntuacionMinima Decimal
+  puntuacionMaxima Decimal
+  interpretacion String
+  pruebaId      Int?
+  prueba        Prueba?  @relation(fields: [pruebaId], references: [id])
+  dimensionId   Int?
+  dimension     Dimension? @relation(fields: [dimensionId], references: [id])
+  
+  @@index([pruebaId])
+  @@index([dimensionId])
+}
+
+// Modelo para los resultados por dimensión
+model ResultadoDimension {
+  id            Int      @id @default(autoincrement())
+  aplicacionId  Int
+  aplicacion    Aplicacion @relation(fields: [aplicacionId], references: [id])
+  dimensionId   Int
+  dimension     Dimension @relation(fields: [dimensionId], references: [id])
+  puntuacion    Decimal
+  porcentaje    Decimal  // Almacenado para rendimiento (calculable pero cacheado)
+  clasificacion String?
+  interpretacion String?
+  fechaCreacion DateTime @default(now())
+  
+  @@unique([aplicacionId, dimensionId])
+  @@index([aplicacionId])
+  @@index([dimensionId])
+}
+
+// Modelo para los resultados globales
+model ResultadoGlobal {
+  id            Int      @id @default(autoincrement())
+  aplicacionId  Int
+  aplicacion    Aplicacion @relation(fields: [aplicacionId], references: [id])
+  puntuacion    Decimal
+  clasificacion String?
+  interpretacion String?
+  fechaCreacion DateTime @default(now())
+  pruebaId      Int
+  prueba        Prueba   @relation(fields: [pruebaId], references: [id])
+  
+  @@unique([aplicacionId])
+  @@index([aplicacionId])
+  @@index([pruebaId])
+}
+
+// Modelo para las aplicaciones de pruebas (cuando un candidato toma una prueba)
+model Aplicacion {
+  id            Int      @id @default(autoincrement())
+  candidatoId   Int
+  candidato     Candidato @relation(fields: [candidatoId], references: [id])
+  pruebaId      Int
+  prueba        Prueba   @relation(fields: [pruebaId], references: [id])
+  usuarioId     Int?     // Evaluador que aplicó/administró la prueba
+  evaluador     Usuario? @relation(fields: [usuarioId], references: [id])
+  fechaInicio   DateTime @default(now())
+  fechaFin      DateTime?
+  numeroIntento Int      @default(1)
+  completada    Boolean  @default(false)
+  respuestas    Respuesta[]
+  resultadosDimension ResultadoDimension[]
+  resultadosGlobales ResultadoGlobal[]
+  
+  @@index([candidatoId, pruebaId])
+  @@index([pruebaId])
+  @@index([usuarioId])
+}
+
+// Modelo para los candidatos
+model Candidato {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  apellido      String
+  cedula        String   @unique
+  email         String   @unique
+  telefono      String?
+  cargoPostulado String?
+  fechaCreacion DateTime @default(now())
+  
+  aplicaciones Aplicacion[]
+  
+  @@index([cedula])
+  @@index([email])
+}
+
+// Modelo para los usuarios del sistema (administradores, evaluadores, etc.)
+model Usuario {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  password      String
+  nombre        String
+  rol           String   @default("EVALUADOR") // ADMIN, EVALUADOR, etc.
+  fechaCreacion DateTime @default(now())
+  
+  aplicaciones Aplicacion[]
+  
+  @@index([email])
+}
+
+// Modelo para las respuestas dadas por el candidato en una aplicación
+model Respuesta {
+  id                Int      @id @default(autoincrement())
+  aplicacionId      Int
+  aplicacion        Aplicacion      @relation(fields: [aplicacionId], references: [id])
+  preguntaId        Int
+  pregunta          Pregunta        @relation(fields: [preguntaId], references: [id])
+  opcionRespuestaId Int
+  opcionRespuesta   OpcionRespuesta @relation(fields: [opcionRespuestaId], references: [id])
+  fechaCreacion     DateTime @default(now())
+  
+  @@unique([aplicacionId, preguntaId])
+  @@index([aplicacionId])
+  @@index([preguntaId])
+  @@index([opcionRespuestaId])
+}
