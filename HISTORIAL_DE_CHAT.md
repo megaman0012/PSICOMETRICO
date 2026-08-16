@@ -5,6 +5,32 @@
 
 
 
+## ⚙️ SESIÓN: MEDICIÓN DE RECURSOS Y PUNTO DE VERSIÓN v0.2 - `domingo, 16 de agosto de 2026`
+
+### Objetivo
+Responder si el proyecto puede medirse en recursos (mínimo para funcionar bien, alcance en
+simultáneo y en almacenamiento) y crear un punto de versión v0.2.
+
+### Medición real en producción (`docker stats`, `pg_database_size`, `ab`)
+- **Pila en idle**: backend ~80 MiB + postgres ~103 MiB + frontend ~4.4 MiB = **~188 MiB RAM**, ~0% CPU.
+- **BD actual**: 9.5 MB (3 pruebas semilla, 50 preguntas, 200 opciones, 70 respuestas, 4 aplicaciones).
+- **Backup**: ~69 KB por dump. **Imágenes**: ~1 GB (backend 457 MB + postgres 464 MB + frontend 53 MB).
+- **Rendimiento**: `/health` 369 req/s (c=20, ~2.7 ms) antes del throttle; frontend estático 429 req/s;
+  consulta con BD (`/aplicaciones`) 13–43 ms. **Rate-limit global: 60 req/min por IP** (el cuello de botella real).
+
+### Conclusiones (documentadas en `MEDICION_DE_RECURSOS.md`)
+- **Mínimo para funcionar bien**: 1 vCPU / 1 GiB RAM / 10 GiB disco (recomendado 2 vCPU / 2 GiB).
+- **Simultáneo**: flujo de examen = 3 peticiones → ~20 exámenes/min por IP; escala con IPs distintas.
+- **Almacenamiento**: ~20 KB por examen → 100.000 exámenes ≈ 2 GB; décadas de margen con 10 GiB.
+- Los 3 contenedores siguen healthy y no se tocó ningún dato de producción.
+
+### Punto de versión
+- Documentación `MEDICION_DE_RECURSOS.md` creada y referenciada en `README.md`.
+- Tag git anotado **`v0.2`** sobre `f30009c`.
+- Sesión registrada en el historial.
+
+---
+
 ## ⚙️ SESIÓN: CRON DE BACKUPS + VALIDACIÓN DE RESTORE EN PRODUCCIÓN - `domingo, 16 de agosto de 2026`
 
 ### Objetivo

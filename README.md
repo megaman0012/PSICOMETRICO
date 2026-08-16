@@ -275,6 +275,13 @@ make restore FILE=backups/psicometrico_20260816_033000.sql   # restaura sobre la
 > `backups/backup.log`) y el restore fue **validado** en producción: el dump se restauró sin
 > errores en una base temporal y los conteos de datos coincidieron con la base real.
 
+## Medición de recursos y alcance (v0.2)
+
+Ver [MEDICION_DE_RECURSOS.md](MEDICION_DE_RECURSOS.md): uso real de RAM/CPU medido en
+producción (~188 MiB de pila), requisitos mínimos (1 vCPU / 1 GiB RAM / 10 GiB disco),
+alcance en simultáneo (~20 exámenes/min por IP por el rate-limit de 60 req/min) y
+crecimiento de almacenamiento (~20 KB por examen).
+
 ## CI (GitHub Actions)
 
 En cada push/PR a `main`, `.github/workflows/ci.yml` ejecuta:
