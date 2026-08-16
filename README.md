@@ -269,8 +269,11 @@ make restore FILE=backups/psicometrico_20260816_033000.sql   # restaura sobre la
 ```
 
 `backup.sh` hace `pg_dump` del contenedor `postgres` y rota los backups más viejos que
-`BACKUP_RETENTION_DAYS` (por defecto 14 días). Pruebe el restore en una base de prueba antes de
-necesitarlo de verdad.
+`BACKUP_RETENTION_DAYS` (por defecto 14 días).
+
+> **Estado (16/08/2026):** el cron está **instalado** (corre como root a las 03:30, log en
+> `backups/backup.log`) y el restore fue **validado** en producción: el dump se restauró sin
+> errores en una base temporal y los conteos de datos coincidieron con la base real.
 
 ## CI (GitHub Actions)
 

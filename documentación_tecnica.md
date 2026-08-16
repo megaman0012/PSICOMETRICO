@@ -150,4 +150,4 @@ Basado en las respuestas anteriores, ajustaré el modelo de datos propuesto inic
 - **CORS/rate-limit/helmet**: aplicados (16/08/2026): `origin` explícito (`CORS_ORIGIN`), `helmet`, 60 req/min global y 5 intentos de login / 15 min (429).
 - Frontend: bundle inicial 225 kB (gzip 75 kB) con Recharts en chunk aparte — code-splitting aplicado.
 - PostgreSQL: en desarrollo atado a `127.0.0.1:5433`; en `docker-compose.prod.yml` no se publica.
-- Backups: script y Makefile listos; falta programar el cron y probar un restore real en producción.
+- Backups (16/08/2026): **cron activo como root** (`30 3 * * *`, `COMPOSE_FILE=docker-compose.prod.yml`, log en `backups/backup.log`, retención 14 días) y **restore validado**: dump restaurado sin errores en una BD temporal (`psicometrico_restore_test`) dentro del contenedor, conteos idénticos a producción (Usuario=2, Candidato=2, Prueba=3, 15 tablas de dominio) y BD temporal eliminada después.

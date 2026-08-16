@@ -39,3 +39,6 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# Backups (dumps de la BD de producción, no deben subirse)
+backups/
