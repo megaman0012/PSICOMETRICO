@@ -17,8 +17,15 @@ export default function Login() {
     try {
       await login(email, password);
       navigate('/');
-    } catch {
-      setError('Credenciales inválidas. Verifique su correo y contraseña.');
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        setError('Credenciales inválidas. Verifique su correo y contraseña.');
+      } else {
+        setError(
+          'No se pudo conectar con el servidor. Verifique que el backend esté arriba (puerto 3021) y vuelva a intentar.',
+        );
+      }
     } finally {
       setCargando(false);
     }

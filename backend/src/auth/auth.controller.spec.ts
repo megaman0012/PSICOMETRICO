@@ -1,3 +1,4 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 
 describe('AuthController', () => {
@@ -39,27 +40,28 @@ describe('AuthController', () => {
       expect(resultado).toEqual({ access_token: 'jwt' });
     });
 
-    it('debe devolver credenciales inválidas cuando el usuario no existe', async () => {
+    it('debe lanzar 401 cuando el usuario no existe', async () => {
       authService.validateUser.mockResolvedValue(null);
 
-      const resultado = await controller.login({
-        email: 'no@existe.com',
-        password: 'Admin123!',
-      } as any);
+      await expect(
+        controller.login({
+          email: 'no@existe.com',
+          password: 'Admin123!',
+        } as any),
+      ).rejects.toThrow(UnauthorizedException);
 
       expect(authService.login).not.toHaveBeenCalled();
-      expect(resultado).toEqual({ message: 'Credenciales inválidas' });
     });
 
-    it('debe devolver credenciales inválidas cuando la contraseña es incorrecta', async () => {
+    it('debe lanzar 401 cuando la contraseña es incorrecta', async () => {
       authService.validateUser.mockResolvedValue(null);
 
-      const resultado = await controller.login({
-        email: 'a@b.com',
-        password: 'Incorrecta1!',
-      } as any);
-
-      expect(resultado).toEqual({ message: 'Credenciales inválidas' });
+      await expect(
+        controller.login({
+          email: 'a@b.com',
+          password: 'Incorrecta1!',
+        } as any),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
