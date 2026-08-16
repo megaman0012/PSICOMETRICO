@@ -4,10 +4,11 @@ Sistema para administrar, calificar y analizar pruebas psicométricas para candi
 
 ## Arquitectura
 
-- **Backend**: NestJS + TypeScript + Prisma + PostgreSQL
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS + Recharts
+- **Backend**: NestJS + TypeScript + Prisma + PostgreSQL (helmet, CORS configurable, rate-limit)
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS + Recharts (code-splitting)
 - **Base de datos**: PostgreSQL
-- **Containerización**: Docker Compose
+- **Containerización**: Docker Compose (desarrollo `docker-compose.yml` / producción `docker-compose.prod.yml`)
+- **Proceso**: CI en GitHub Actions · Makefile · backups `pg_dump`
 
 ## Características
 
@@ -36,14 +37,33 @@ Sistema para administrar, calificar y analizar pruebas psicométricas para candi
 
 ### Opción 1: Con Docker Compose (Recomendado)
 
+Hay dos archivos de compose con el mismo concepto Docker:
+
+| Archivo | Para qué | Comando |
+|---------|----------|---------|
+| `docker-compose.yml` | **Desarrollo** (hot-reload con bind mounts) | `docker compose up --build -d` |
+| `docker-compose.prod.yml` | **Producción** (imágenes compiladas) | `docker compose -f docker-compose.prod.yml up -d --build` |
+
+#### Desarrollo
+
 1. Clone el repositorio
 2. Ejecute: `docker compose up --build -d`
 3. El backend estará disponible en: **http://localhost:3021**
-4. El frontend estará disponible en: **http://localhost:5173**
-5. PostgreSQL (interno) en: http://localhost:5433
+4. El frontend (dev server Vite) estará disponible en: **http://localhost:5173**
+5. PostgreSQL (interno) en: http://localhost:5433 (atado a `127.0.0.1`, solo accesible desde la máquina)
 
 > Si la base ya existe con un esquema viejo (entorno de desarrollo):
 > `docker compose down -v && docker compose up --build -d`
+> (`-v` borra también los volúmenes de `node_modules` y la base; no use `-v` en producción).
+
+#### Producción
+
+1. Clone el repositorio en el servidor
+2. `cp .env.example .env` y configure los secretos (ver "Despliegue en Producción" abajo)
+3. `docker compose -f docker-compose.prod.yml up -d --build`
+4. El frontend (estáticos servidos por **Nginx**) estará en: **http://localhost:5173**
+5. El backend en: **http://localhost:3021**
+6. PostgreSQL NO se expone: queda solo en la red interna de Docker
 
 ### Credenciales por defecto (seed)
 
@@ -125,7 +145,8 @@ automáticamente; el backend carga su `.env` con `dotenv` y el seed los usa para
 
 ### Backend
 - `DATABASE_URL`: URL de conexión a PostgreSQL
-- `JWT_SECRET`: secreto para firmar los tokens JWT. **Requerido** (el backend no arranca sin él)
+- `JWT_SECRET`: secreto para firmar los tokens JWT. **Requerido en producción** (fail-fast: el compose aborta sin él y el backend rechaza el valor por defecto)
+- `CORS_ORIGIN`: origen(es) permitidos para CORS, separados por coma (por defecto `http://localhost:5173`). Si la página se sirve desde otra URL/host, debe estar listada aquí
 - `PORT`: puerto del backend (por defecto `3000`)
 - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_EVALUADOR_EMAIL`, `SEED_EVALUADOR_PASSWORD`: credenciales de los usuarios iniciales del seed
 
@@ -148,11 +169,24 @@ cp .env.example .env
 openssl rand -base64 48
 
 # 4. Editar el .env y cambiar: JWT_SECRET, POSTGRES_PASSWORD,
-#    SEED_ADMIN_PASSWORD y SEED_EVALUADOR_PASSWORD (deje las URLs de acceso listas)
+#    SEED_ADMIN_PASSWORD, SEED_EVALUADOR_PASSWORD y (si aplica) CORS_ORIGIN
 
-# 5. Levantar los servicios
-docker compose up -d --build
+# 5. Levantar los servicios (imágenes de PRODUCCIÓN)
+docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+`docker-compose.prod.yml` usa imágenes **multi-stage** y es distinto del de desarrollo:
+
+- El backend se **compila** (`nest build`) y arranca el binario (`node dist/src/main.js`), no
+  `start:dev` con watch. `NODE_ENV=production`.
+- El frontend se compila (`vite build`) y lo sirve **Nginx** dentro del contenedor (no `vite dev`).
+- **No hay bind mounts ni volúmenes de `node_modules`**: la imagen trae su propio código y
+  dependencias (imposible el incidente del "volumen anónimo viejo").
+- `JWT_SECRET` es **obligatorio**: si no está en el `.env`, el compose aborta; si usa el valor por
+  defecto de desarrollo, el backend se niega a arrancar (fail-fast).
+- El entrypoint de producción solo hace `prisma migrate deploy` + seed idempotente (sin el reset
+  destructivo de desarrollo) y arranca el binario.
+- PostgreSQL no publica puertos (solo red interna). Backend y frontend tienen healthcheck.
 
 La base se inicializa sola la primera vez (migraciones + seed con las credenciales del `.env`).
 El seed solo corre cuando la base está vacía, así que los datos no se pierden al reiniciar.
@@ -163,8 +197,112 @@ El seed solo corre cuando la base está vacía, así que los datos no se pierden
 - Usuario evaluador: el `SEED_EVALUADOR_EMAIL` / `SEED_EVALUADOR_PASSWORD` configurados
 
 ### Notas
-- Si accede desde otro equipo, ponga en `VITE_API_URL` la IP/dominio público del servidor (`http://IP:3021`) y abra los puertos 5173/3021.
-- Recomendado detrás de un proxy (Nginx/Traefik) con **HTTPS** para producción definitiva.
+- Si accede desde otro equipo, ponga en `VITE_API_URL` la IP/dominio público del servidor
+  (`http://IP:3021`) **y en `CORS_ORIGIN`** la URL con la que se abre la página
+  (`http://IP:5173` o el dominio). En producción `VITE_API_URL` se inyecta en el **build** de la
+  imagen: si la cambia, reconstruya con `docker compose -f docker-compose.prod.yml up -d --build`.
+- No ejecute desarrollo y producción a la vez en la misma máquina con el mismo `.env`.
+- Recomendado detrás de un proxy (Nginx/Traefik) con **HTTPS** para producción definitiva; ahí
+  mapee el frontend a `80/443` y, si oculta el backend, ajuste `VITE_API_URL` en consecuencia.
+
+## Comandos de mantenimiento (Makefile)
+
+Para estandarizar los comandos y evitar el `down -v` destructivo por accidente, hay un `Makefile`
+en la raíz del proyecto:
+
+```bash
+make up          # Levantar desarrollo (hot-reload)
+make down        # Apagar desarrollo (NO borra datos)
+make logs        # Logs en vivo (desarrollo)
+make prod        # Levantar producción (imágenes compiladas)
+make prod-down   # Apagar producción
+make prod-logs   # Logs en vivo (producción)
+make test        # Tests backend (59/59) + build frontend
+make backup      # Backup de la base a ./backups
+make restore FILE=backups/psicometrico_YYYYMMDD_HHMMSS.sql   # Restaurar un backup
+```
+
+> ⚠️ **Nunca use `docker compose down -v`**: borra el volumen `postgres_data` con todos los datos.
+
+## Backups
+
+La única fuente de datos persistente es el volumen `postgres_data`. Dos formas de respaldarlo:
+
+**1. Manual (Makefile):**
+```bash
+make backup                                     # genera backups/psicometrico_<fecha>.sql
+make restore FILE=backups/psicometrico_20260816_033000.sql   # restaura sobre la BD actual
+```
+
+**2. Programado (cron) — producción:**
+```bash
+# Editar crontab:  crontab -e
+30 3 * * * COMPOSE_FILE=docker-compose.prod.yml /home/server-gea/Documentos/psicometrico/backup.sh >> /home/server-gea/Documentos/psicometrico/backups/backup.log 2>&1
+```
+
+`backup.sh` hace `pg_dump` del contenedor `postgres` y rota los backups más viejos que
+`BACKUP_RETENTION_DAYS` (por defecto 14 días). Pruebe el restore en una base de prueba antes de
+necesitarlo de verdad.
+
+## CI (GitHub Actions)
+
+En cada push/PR a `main`, `.github/workflows/ci.yml` ejecuta:
+- **Backend**: `npm ci` → `prisma generate` → `npm test` → `npm run build`
+- **Frontend**: `npm ci` → `npm run build` (typecheck + bundle)
+
+Un error de TypeScript como el del incidente del 13/08 se detecta en CI antes de tocar el servidor.
+
+## Solución de Problemas
+
+### Login: "Credenciales inválidas" vs "No se pudo conectar con el servidor"
+Desde el 16/08/2026 el frontend distingue ambos casos:
+- **401 → "Credenciales inválidas"**: el usuario/contraseña son incorrectos (el backend responde
+  401 y espera 600 ms antes de rechazar, para frenar fuerza bruta).
+  ⚠️ Además hay **rate-limit**: máximo **5 intentos de login cada 15 minutos** por IP. Si lo supera,
+  el backend responde `429 Too Many Requests` y el frontend muestra el aviso correspondiente.
+- **Sin respuesta / 5xx → "No se pudo conectar con el servidor..."**: el backend está caído o la
+  URL no es accesible. Verifique que responda:
+
+```bash
+curl http://localhost:3021
+# o el healthcheck:
+curl http://localhost:3021/health
+```
+
+Si no responde, revise el log del contenedor:
+
+```bash
+docker compose logs backend
+```
+
+Causas frecuentes (visto el 13/08/2026):
+1. **Error de TypeScript en modo watch** → el backend no arranca (`Found N errors. Watching...`).
+   Corregir el código y reconstruir.
+2. **Volumen de `node_modules` desactualizado (solo desarrollo)** → `Cannot find module '...'` tras
+   instalar una dependencia nueva. Ahora es un **volumen nombrado** (no anónimo) que se puede
+   recrear sin tocar la base:
+
+   ```bash
+   docker compose down
+   docker volume rm psicometrico_backend_node_modules psicometrico_frontend_node_modules
+   docker compose up -d --build
+   ```
+
+> En **producción** esto no ocurre: `docker-compose.prod.yml` no monta `node_modules` (la imagen
+> trae sus propias dependencias). Regla en desarrollo al agregar una dependencia al backend:
+> `npm install --package-lock-only` (host) → `docker compose up --build`. Si persiste el error,
+> recrear el volumen nombrado (nunca `down -v` a menos que quieras borrar también la BD).
+
+### Backend no arranca por `JWT_SECRET`
+En **producción** el compose aborta si `JWT_SECRET` no está en el `.env`, y el backend se niega a
+arrancar si está vacío o usa el valor por defecto de desarrollo (fail-fast real). Genere uno:
+
+```bash
+openssl rand -base64 48
+```
+
+En **desarrollo** (`docker-compose.yml`) el compose inyecta el valor por defecto para que todo
+funcione sin configurar nada.
 
 ## Licencia
 

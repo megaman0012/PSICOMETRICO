@@ -1,5 +1,237 @@
 
 
+## ⚙️ LOTE P2/P3 APLICADO: HEALTHCHECKS, HARDENING, CI, MAKEFILE Y BACKUPS (P1-6, P1-8, P3-11/12/13) - `sábado, 16 de agosto de 2026`
+
+### Objetivo
+Cerrar los pendientes de calidad/seguridad del plan: healthchecks en desarrollo, CORS explícito +
+helmet + rate-limit, y la infraestructura de proceso (CI, Makefile, backups). Detalle en
+`PLAN_DE_OPTIMIZACION.md` (sección "Aplicado — Lote P2/P3").
+
+### Cambios
+- **`docker-compose.yml`** (dev): healthcheck para backend (`fetch` a `:3000/health`) y frontend
+  (dev server `:5173`); `depends_on` con `condition: service_healthy`.
+- **`docker-compose.prod.yml`**: healthcheck del frontend Nginx (`wget` a `:80`); se añadió
+  `CORS_ORIGIN` al backend.
+- **`backend/src/main.ts`**: `helmet` (CSP desactivado: API JSON) + CORS con `origin` explícito
+  desde `CORS_ORIGIN` (lista separada por coma, por defecto `http://localhost:5173`).
+- **`backend/src/app.module.ts`**: `ThrottlerModule.forRoot` (60 req/min global) con
+  `ThrottlerGuard` como `APP_GUARD`.
+- **`backend/src/auth/auth.controller.ts`**: `@Throttle({ default: { limit: 5, ttl: 900000 } })`
+  en `/auth/login` (5 intentos / 15 min) además del retardo de 600 ms.
+- **`backend/package.json`**: + `@nestjs/throttler`, + `helmet`.
+- **`.env.example`**: + `CORS_ORIGIN`.
+- **`.github/workflows/ci.yml`** (nuevo): backend (`npm ci` → `prisma generate` → `npm test` →
+  `npm run build`) y frontend (`npm ci` → `npm run build`) en cada push/PR a `main`.
+- **`Makefile`** (nuevo): `up/down/logs/prod/prod-down/prod-logs/test/backup/restore`. Sin `-v`.
+- **`backup.sh`** (nuevo, ejecutable): `pg_dump` + rotación 14 días, usable desde cron con
+  `COMPOSE_FILE=docker-compose.prod.yml`.
+
+### Verificación
+- ✅ Backend: **59/59 tests** · `nest build` OK.
+- ✅ `docker compose config` válido para dev y prod.
+- ✅ Dependencias nuevas instaladas y compiladas (throttler v6, helmet v8).
+- ✅ Desplegado en producción: 3/3 contenedores **healthy**; healthcheck frontend usa
+  `http://127.0.0.1/` porque `wget` resolvía `localhost` a `::1` (IPv6) y nginx solo escucha IPv4.
+- ✅ Helmet: headers de seguridad presentes (X-Frame-Options, nosniff, Referrer-Policy...).
+- ✅ CORS: preflight con `http://localhost:5173` → `Access-Control-Allow-Origin` presente;
+  origen no permitido → **sin** header (bloqueado por el navegador).
+- ✅ Rate-limit: 6 intentos de login → 5×`401` y el 6º `429 Too Many Requests` (5/15 min); el
+  contador en memoria se limpia reiniciando el backend.
+- ✅ Login real tras el fix: `201` con JWT · frontend index y SPA `/dashboard` 200.
+
+### Pendientes (siguiente sesión)
+- Ninguno del plan. Mejora continua: HTTPS detrás de reverse proxy si se expone a Internet,
+  monitorización/alertas de uptime.
+
+---
+
+## ⚙️ LOTE P1 APLICADO: LOGIN HONESTO, CODE-SPLITTING Y RED (P1-5, P2-10, P1-7) - `sábado, 16 de agosto de 2026`
+
+### Objetivo
+Resolver la causa raíz del incidente del 13/08 (mensaje de login engañoso), reducir el bundle del
+frontend con code-splitting y endurecer la red (Postgres solo local). Detalle en
+`PLAN_DE_OPTIMIZACION.md` (sección "Aplicado — Lote P1").
+
+### Cambios
+- **`backend/src/auth/auth.controller.ts`**: credenciales inválidas ahora lanzan
+  `UnauthorizedException` (**HTTP 401**); antes devolvían **200** con `{message}`. Se añadió un
+  retardo de 600 ms en el rechazo para frenar fuerza bruta.
+- **`backend/src/auth/auth.controller.spec.ts`**: los 2 tests de credenciales inválidas ahora
+  esperan `rejects.toThrow(UnauthorizedException)`.
+- **`frontend/src/pages/Login.tsx`**: distingue **401** ("Credenciales inválidas...") de error de
+  red/5xx ("No se pudo conectar con el servidor. Verifique que el backend esté arriba (puerto 3021)...") —
+  el mensaje que causó el incidente del 13/08 ya no se muestra cuando el problema es el backend caído.
+- **`frontend/src/App.tsx`**: `React.lazy` + `Suspense` en todas las rutas (Login queda eager) con
+  fallback spinner.
+- **`frontend/vite.config.ts`**: `build.manualChunks` separando `react` y `recharts`.
+- **`docker-compose.yml`** (dev): Postgres atado a **`127.0.0.1:5433`** (ya no expuesto a la red).
+  En `docker-compose.prod.yml` Postgres ya no se exponía (solo red interna).
+
+### Verificación
+- ✅ Backend: **59/59 tests** (`npm test`) · `nest build` OK.
+- ✅ Frontend: `tsc --noEmit` + `vite build` OK. Bundle inicial **655 kB → 225 kB** (gzip 75 kB);
+  Recharts (381 kB) queda en el chunk `Resultados-*.js` que solo se descarga al abrir esa página.
+- ✅ `docker compose config` válido para dev y prod.
+- ✅ Login 401 probado contra el backend: credenciales malas → 401; correctas → 201 con JWT.
+- ⚠️ Imágenes `:prod` reconstruidas y desplegadas en esta máquina (ver "LOTE P1 EN MARCHA").
+
+### Pendientes (siguiente sesión)
+- Aplicado en el lote P2/P3 de hoy: P1-6, P1-8 y P3-11/12/13 (ver sección arriba).
+
+---
+
+## ⚙️ LOTE P1 EN MARCHA: PRODUCCIÓN ACTUALIZADA - `sábado, 16 de agosto de 2026`
+
+### Pasos ejecutados
+1. Cambios de código del lote P1 (login honesto, code-splitting, red) aplicados y validados
+   (tests 59/59, builds OK, compose config OK).
+2. **Rebuild de imágenes `:prod`** (`docker compose -f docker-compose.prod.yml up -d --build`).
+3. Smoke test end-to-end en producción (ver "Verificación" abajo).
+
+### Verificación end-to-end (producción)
+- ✅ `GET /health` → `{"status":"OK"}`.
+- ✅ `POST /auth/login` credenciales correctas → `201` con `access_token`.
+- ✅ `POST /auth/login` credenciales incorrectas → **401** (antes 200 con mensaje).
+- ✅ Frontend: index `200` y chunk principal reducido (225 kB); `/resultados` carga Recharts en
+  chunk aparte.
+
+---
+
+## ⚙️ LOTE P0 APLICADO: MODO PRODUCCIÓN EN DOCKER (builds, nginx, volúmenes y JWT fail-fast) - `sábado, 15 de agosto de 2026`
+
+### Objetivo
+Mantener el concepto Docker (trabajar con `docker compose`) y hacerlo instalable en un servidor de
+producción: backend compilado, frontend como build estático con Nginx, eliminar los volúmenes
+anónimos de `node_modules` y fail-fast real de `JWT_SECRET`. Detalle completo en
+`PLAN_DE_OPTIMIZACION.md` (sección "Aplicado — Lote P0").
+
+### Cambios
+- **`backend/Dockerfile.prod`** (nuevo): multi-stage — build (`npm ci` + `nest build`) → runtime
+  (`node:18-slim`, `npm ci --omit=dev`, `node dist/src/main.js`).
+- **`backend/docker-entrypoint.prod.sh`** (nuevo): `prisma migrate deploy` + seed idempotente con el
+  seed **compilado** (`dist/prisma/seed.js`) y sin el reset destructivo de desarrollo.
+- **`frontend/Dockerfile.prod` + `frontend/nginx.conf`** (nuevos): `vite build` → estáticos servidos
+  por **Nginx** (SPA fallback + gzip). `VITE_API_URL` como build arg.
+- **`docker-compose.prod.yml`** (nuevo): imágenes compiladas, sin bind mounts ni volúmenes de
+  `node_modules`, `NODE_ENV=production`, `JWT_SECRET` obligatorio (`:?`), healthchecks en
+  backend/frontend, PostgreSQL solo en red interna.
+- **`docker-compose.yml`** (dev): volúmenes anónimos `/app/node_modules` → **volúmenes nombrados**
+  recreables (`docker volume rm psicometrico_backend_node_modules ...`) sin tocar la base.
+- **`backend/src/main.ts`**: en `NODE_ENV=production`, si `JWT_SECRET` falta o es el valor por
+  defecto → `[FATAL]` + `process.exit(1)`.
+- **`backend/src/auth/jwt.strategy.ts`**: eliminado el fallback `|| 'cambia_este_secreto_en_produccion'`
+  (el fix del 13/08 queda reemplazado por un getter tipado que valida en runtime).
+- **`backend/package.json`**: `prisma` CLI movido a `dependencies` (el runtime con `--omit=dev`
+  necesita ejecutar `migrate deploy`). Lockfile regenerado.
+
+### Verificación
+- ✅ `docker compose config` válido para dev y prod; el prod **aborta** sin `JWT_SECRET`.
+- ✅ Backend: **59/59 tests** y `nest build` OK.
+- ✅ Frontend: `vite build` OK (bundle 655 kB; code-splitting queda en P2-10).
+- ✅ Fail-fast probado sobre el binario: con el secreto por defecto sale `[FATAL]` y `exit 1`.
+- ✅ Escenario runtime real validado en carpeta limpia: `npm ci --omit=dev` instala Prisma CLI 5.22,
+  genera el cliente y la gráfica de módulos compilados carga sin dependencias de desarrollo.
+- ⚠️ La build de las imágenes quedó pendiente del daemon Docker (estaba apagado en la máquina).
+- ✅ **DESPLIEGUE EJECUTADO Y VALIDADO el `16/08/2026`** (ver sección "LOTE P0 EN MARCHA" abajo):
+  imágenes `:prod` construidas y corriendo en esta máquina con el compose de producción.
+
+### Uso
+```bash
+# Desarrollo (hot-reload, como siempre)
+docker compose up -d --build
+
+# Producción (instalable en servidor)
+cp .env.example .env      # configure JWT_SECRET (openssl rand -base64 48), POSTGRES_PASSWORD, seed
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Pendientes (siguiente sesión)
+- Aplicado en el lote P2/P3 de hoy (ver sección arriba). (P1-5, P2-10 y P1-7 ya aplicados — ver "LOTE P1 APLICADO".)
+
+---
+
+## ⚙️ LOTE P0 EN MARCHA: PRODUCCIÓN EJECUTADO EN ESTA MÁQUINA - `sábado, 16 de agosto de 2026`
+
+### Contexto
+El daemon de Docker estaba apagado (`docker.service` `disabled`/`inactive`). Se activó con
+`systemctl start docker` y se habilitó con `systemctl enable --now docker` para que arranque solo
+en reinicios del servidor.
+
+### Pasos ejecutados
+1. **`.env` raíz creado** desde `.env.example` con `JWT_SECRET` real generado con `openssl rand -base64 48`.
+2. **`docker compose down`** → apagó los 3 contenedores dev (`psicometrico-postgres`,
+   `psicometrico-backend`, `psicometrico-frontend`) y su red. El volumen `psicometrico_postgres_data`
+   se conservó (la BD no se perdió).
+3. **Build de imágenes `:prod`** con el daemon activo:
+   - `psicometrico-backend:prod` 619 MB (vs 898 MB de la dev) — multi-stage funcionando.
+   - `psicometrico-frontend:prod` 73.5 MB (vs 355 MB de la dev) — nginx + build estático.
+4. **`docker compose -f docker-compose.prod.yml up -d`** → los 3 servicios arriba. Se corrigió de
+   paso el tag de imagen: dev y prod usaban el mismo nombre (`psicometrico-backend`) y se pisaban;
+   ahora prod usa tags explícitos `:prod` (`docker-compose.prod.yml:33` y `:62`).
+
+### Verificación end-to-end (producción)
+- ✅ `GET /health` → `{"status":"OK"}` · backend healthy (healthcheck OK).
+- ✅ Frontend nginx: index `200`, ruta SPA `/dashboard` `200` (fallback funcionando).
+- ✅ `POST /auth/login` con `admin@psicometrico.com` → `201` con `access_token` JWT (sub: 58,
+  rol ADMIN) → confirma que **los datos de la BD dev se conservaron** (el seed no se re-ejecutó).
+- ✅ Migraciones + seed idempotente corrieron en el arranque; todas las rutas mapeadas.
+
+### Comandos de operación (producción)
+```bash
+# Estado / logs
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f backend
+
+# Actualizar tras cambios
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Bajar (no borra postgres_data)
+docker compose -f docker-compose.prod.yml down
+
+# Volver a desarrollo (hot-reload) cuando se quiera
+docker compose -f docker-compose.prod.yml down
+docker compose up -d --build
+```
+
+### Pendientes (siguiente sesión)
+- Aplicado en el lote P2/P3 de hoy (ver sección arriba). (P1-5, P2-10 y P1-7 ya aplicados — ver "LOTE P1 APLICADO".)
+
+---
+
+## 🔐 INCIDENTE RESUELTO: LOGIN "CREDENCIALES INVÁLIDAS" (backend caído) - `jueves, 13 de agosto de 2026`
+
+### Síntoma
+El usuario reportaba **"Credenciales inválidas"** al intentar entrar al psicométrico en `http://localhost:5173`, aun usando las credenciales del seed correctas (`admin@psicometrico.com` / `Admin123!`).
+
+### Diagnóstico (NO era conflicto de puertos)
+1. `curl localhost:3021` sin respuesta → el contenedor estaba "Up" pero el proceso dentro **no arrancaba**.
+2. Log del backend: `Found 1 error. Watching for file changes` → error de TypeScript que dejó el servidor sin iniciar (corre en `--watch`, así que nunca levanta).
+3. Causa: `backend/src/auth/jwt.strategy.ts:12` pasaba `process.env.JWT_SECRET` (tipo `string | undefined`) a `secretOrKey`, que exige `string | Buffer`.
+4. El frontend (`Login.tsx:21`) muestra **"Credenciales inválidas" para CUALQUIER error** (incluida la falta de conexión al backend) → el mensaje era engañoso.
+5. La BD estaba sana (usuarios seed presentes en `Usuario`).
+
+### Fix aplicado (1 línea)
+- `backend/src/auth/jwt.strategy.ts:12`:
+  ```ts
+  secretOrKey: process.env.JWT_SECRET || 'cambia_este_secreto_en_produccion',
+  ```
+
+### Segundo problema encadenado (volumen anónimo `node_modules`)
+- Tras el rebuild de la imagen, el backend seguía cayendo: `Cannot find module 'dotenv/config'` (por el `import 'dotenv/config'` de `main.ts`).
+- Causa: el volumen anónimo `/app/node_modules` del `docker-compose.yml` persistió las dependencias de una imagen vieja sin `dotenv`. **Rebuild de la imagen no lo reemplaza** porque el volumen montado tiene prioridad.
+- Fix: eliminar el volumen anónimo y recrear el contenedor backend (la BD `postgres_data` no se tocó).
+
+### Verificación
+- `POST /auth/login` con `admin@psicometrico.com` / `Admin123!` → **200** con `access_token` JWT válido.
+- Log: `Nest application successfully started` con todas las rutas mapeadas; backend respondiendo en `:3021`.
+
+### Notas / pendiente
+- Este fix **aún no está commiteado** (`git status` muestra `M backend/src/auth/jwt.strategy.ts`).
+- `docker-compose.yml:29` sigue inyectando `JWT_SECRET` con fallback `cambia_este_secreto_en_produccion`; en producción se debe poner uno real (`openssl rand -base64 48`). Ver `PLAN_DE_OPTIMIZACION.md`.
+- Recordatorio de infraestructura (se reafirma): **al agregar una dependencia al backend**, `npm install --package-lock-only` (host) → `docker compose up --build`, y si persiste el error de módulo faltante, `docker compose down` + recrear el volumen anónimo.
+
+---
+
 ## ✅ CIERRE DE CASO - PROYECTO PSICOMÉTRICO v0.1 LISTA PARA DESPLIEGUE - `miércoles, 12 de agosto de 2026`
 
 ### Estado final del proyecto

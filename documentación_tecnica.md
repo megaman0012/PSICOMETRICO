@@ -100,4 +100,38 @@ Basado en las respuestas anteriores, ajustaré el modelo de datos propuesto inic
 - **Frontend — pantalla de administración de pruebas** (`/admin-pruebas`, solo ADMIN): listado de todas las pruebas (activas e inactivas) con conteos, y formulario por secciones (prueba → umbrales globales → dimensiones → preguntas → opciones → umbrales de dimensión) para crear/editar, con activar/desactivar y eliminar.
 - **Frontend — AplicarPrueba**: barra de progreso fija (sticky) con "Pregunta X de Y" según el scroll, y **etiquetas Likert** (1=Muy en desacuerdo … 5=Muy de acuerdo) para las preguntas de escala, sin cambiar el modelo de datos.
 - **Tests**: 59/59 pasando (8 suites: calificación, auth service, auth controller, roles guard, pruebas, candidatos, aplicaciones, reportes).
-- **Pendiente**: code-splitting del bundle del frontend (Recharts > 500 kB), `.env` de producción con secretos reales y HTTPS detrás de proxy.
+- **Pendiente**: HTTPS detrás de proxy si se expone a Internet y monitorización/alertas de uptime. Ver el plan priorizado en `PLAN_DE_OPTIMIZACION.md`.
+- **Docker dev/prod (15/08/2026)**: `docker-compose.yml` (desarrollo, hot-reload) y `docker-compose.prod.yml` (producción: imágenes multi-stage compiladas, frontend servido con Nginx, `JWT_SECRET` obligatorio con fail-fast, healthchecks, PostgreSQL solo en red interna, sin volúmenes de `node_modules`). Detalle en `PLAN_DE_OPTIMIZACION.md`.
+- **Seguridad/hardening (16/08/2026)**: `helmet` (CSP off, API JSON) + CORS con `origin` explícito desde `CORS_ORIGIN` (lista separada por coma, por defecto `http://localhost:5173`); rate-limit global `@nestjs/throttler` (60 req/min) y estricto en `/auth/login` (5 intentos / 15 min, HTTP 429); healthchecks en backend y frontend en ambos composes.
+- **Proceso (16/08/2026)**: CI GitHub Actions (`.github/workflows/ci.yml`: backend test+build, frontend build), `Makefile` (up/down/logs/prod/test/backup/restore, sin `-v`) y `backup.sh` (pg_dump + rotación 14 días, para cron).
+
+## Incidentes resueltos
+
+### 16/08/2026 — Lote P2/P3 aplicado (healthchecks, hardening, CI, Makefile, backups)
+- **Healthchecks**: dev y prod ahora marcan backend y frontend como healthy (postgres ya lo tenía); `depends_on` con `condition: service_healthy`.
+- **Hardening (P1-8)**: `helmet` + `CORS_ORIGIN` explícito en `main.ts`; `ThrottlerModule` global (60 req/min) y `@Throttle` en login (5/15 min, responde 429). `@nestjs/throttler` v6 y `helmet` v8 instalados.
+- **Proceso (P3)**: `.github/workflows/ci.yml`, `Makefile`, `backup.sh` (pg_dump + rotación). Restore vía `make restore FILE=...`.
+- 59/59 tests y builds OK; compose dev/prod válidos.
+
+### 15/08/2026 — Lote P0 aplicado (modo producción en Docker)
+- Se aplicaron las 4 mejoras críticas del plan manteniendo el concepto Docker: backend compilado (`Dockerfile.prod`), frontend estático con Nginx (`Dockerfile.prod` + `nginx.conf`), `docker-compose.prod.yml`, volúmenes de `node_modules` nombrados en dev, y fail-fast real de `JWT_SECRET` (`main.ts` + `jwt.strategy.ts` sin fallback). `prisma` CLI pasó a `dependencies` para `npm ci --omit=dev`. 59/59 tests y builds OK.
+
+### 13/08/2026 — Login "Credenciales inválidas" (backend caído)
+- **No era conflicto de puertos.** Dos fallos encadenados:
+  1. `jwt.strategy.ts` rompía la compilación TS (`JWT_SECRET: string | undefined` no asignable a `secretOrKey`). En modo `--watch` el backend nunca arrancaba.
+  2. El volumen anónimo `/app/node_modules` del compose conservó dependencias viejas sin `dotenv` tras el rebuild (`Cannot find module 'dotenv/config'`).
+- Fixes (13/08): fallback de `JWT_SECRET` en `jwt.strategy.ts:12` y recreación del contenedor backend eliminando el volumen anónimo (BD intacta). **El fallback fue reemplazado el 15/08** por validación tipada sin secreto público.
+- Lección clave del frontend: `Login.tsx` mostraba "Credenciales inválidas" para **cualquier** error de red/backend, no solo credenciales malas. **Resuelto el 16/08** (ver sección Lote P1).
+
+### 16/08/2026 — Lote P1 aplicado (login honesto, code-splitting, red)
+- **Login honesto**: el backend ahora responde `401` (`UnauthorizedException`) con retardo de 600 ms ante credenciales inválidas (antes 200 con `{message}`); `Login.tsx` distingue 401 ("Credenciales inválidas") de error de red/5xx ("No se pudo conectar con el servidor").
+- **Code-splitting**: `React.lazy` + `Suspense` en todas las rutas y `manualChunks` (react/recharts) en `vite.config.ts`. Bundle inicial **655 kB → 225 kB**; Recharts (381 kB) solo se carga en `/resultados`.
+- **Red**: Postgres de desarrollo atado a `127.0.0.1:5433` (en prod ya no se publica, solo red interna).
+- 59/59 tests, builds OK, desplegado y validado en producción (201 login OK / 401 login malo).
+
+## Deuda técnica / riesgo conocido (v0.1)
+- **HTTPS**: backend (`3021`) y frontend (`5173`) se exponen en HTTP directo. Para Internet es recomendable un reverse proxy (Nginx/Traefik) con TLS. Para LAN/localhost el estado actual es seguro.
+- **CORS/rate-limit/helmet**: aplicados (16/08/2026): `origin` explícito (`CORS_ORIGIN`), `helmet`, 60 req/min global y 5 intentos de login / 15 min (429).
+- Frontend: bundle inicial 225 kB (gzip 75 kB) con Recharts en chunk aparte — code-splitting aplicado.
+- PostgreSQL: en desarrollo atado a `127.0.0.1:5433`; en `docker-compose.prod.yml` no se publica.
+- Backups: script y Makefile listos; falta programar el cron y probar un restore real en producción.
