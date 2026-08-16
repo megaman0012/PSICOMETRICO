@@ -1,0 +1,11 @@
+* text=auto
+
+# Scripts de shell: siempre LF, sin importar core.autocrlf (evita
+# "set: Illegal option -" al ejecutar entrypoints en Windows)
+*.sh text eol=lf
+
+# Dockerfile y compose: LF también para evitar sorpresas
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+docker-compose*.yml text eol=lf
+*.env.example text eol=lf
