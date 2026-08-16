@@ -71,7 +71,7 @@ Basado en las respuestas anteriores, ajustaré el modelo de datos propuesto inic
   - `Usuario` con `rol` (ADMIN | EVALUADOR) para autenticación JWT.
 - **Motor de calificación**: `finalizarAplicacion` calcula el puntaje por dimensión (SUMA o PROMEDIO), normaliza cada dimensión a escala 0-100 (para SUMA dividiendo entre la suma de los valores máximos de opción; para PROMEDIO entre el valor máximo de la escala Likert) y promedia ponderado por cantidad de preguntas para el global, y consulta los umbrales (`UmbralClasificacion`) por dimensión o globales.
 - **Seed**: 3 pruebas (Big Five PROMEDIO, Integridad SUMA, Aptitudes SUMA) con **ítems reales en español** (20 IPIP / 20 situaciones éticas / 10 aptitudes), umbrales por dimensión y globales (escala 0-100), 2 usuarios y 1 candidato de ejemplo. El seed solo corre si la base está vacía (`docker-entrypoint.sh`), por lo que los cambios hechos vía CRUD no se pierden al reiniciar.
-- **Tests**: 59/59 pasando (`npm test` en `backend/`).
+- **Tests**: 101/101 pasando (`npm test` en `backend/`).
 - **Frontend funcional** (`http://localhost:5173`):
   - React + TypeScript + Vite + Tailwind CSS + Recharts + react-router-dom.
   - `src/context/AuthContext.tsx`: autenticación JWT (token en `localStorage`, perfil, logout).
@@ -99,13 +99,29 @@ Basado en las respuestas anteriores, ajustaré el modelo de datos propuesto inic
 - **CRUD de pruebas (backend)**: `POST/PUT/DELETE /pruebas` (solo ADMIN) con `$transaction` que crea/actualiza prueba + dimensiones + preguntas + opciones + umbrales. `PATCH /pruebas/:id/estado` para activar/desactivar sin reconstruir estructura (no pierde datos). El detalle (`GET /pruebas/:id`) incluye los umbrales por dimensión.
 - **Frontend — pantalla de administración de pruebas** (`/admin-pruebas`, solo ADMIN): listado de todas las pruebas (activas e inactivas) con conteos, y formulario por secciones (prueba → umbrales globales → dimensiones → preguntas → opciones → umbrales de dimensión) para crear/editar, con activar/desactivar y eliminar.
 - **Frontend — AplicarPrueba**: barra de progreso fija (sticky) con "Pregunta X de Y" según el scroll, y **etiquetas Likert** (1=Muy en desacuerdo … 5=Muy de acuerdo) para las preguntas de escala, sin cambiar el modelo de datos.
-- **Tests**: 59/59 pasando (8 suites: calificación, auth service, auth controller, roles guard, pruebas, candidatos, aplicaciones, reportes).
+- **Empresas** (`src/empresas`): CRUD `GET /empresas`, `POST /empresas`, `PUT /empresas/:id`. Listado ordenado con `_count` de candidatos. Modelo con `certificadoTitulo`, `ruc`, `direccion`, `telefono`. Creación/edición solo ADMIN.
+- **Baterías** (`src/baterias`): CRUD `GET/POST /baterias`, `GET /baterias/activas`, `PUT/DELETE /baterias/:id`. Relación `BateriaPrueba` con `orden`. Validan existencia antes de actualizar/eliminar (`NotFoundException`).
+- **Invitaciones** (`src/invitaciones`): flujo completo de evaluación externa.
+  - `POST /invitaciones` crea la invitación con `token` aleatorio (32 bytes hex), expiración (por defecto 48 h), `intentos: 1` y una `Aplicacion` por prueba de la batería. Si `enviarCorreo` y el candidato tiene email, envía el enlace por SMTP.
+  - `POST /invitaciones/:id/reintentar` (ADMIN): borra respuestas/resultados/aplicaciones anteriores y crea nuevas con `intentos+1` (máximo `MAX_INTENTOS = 2`). Rechaza revocadas y las que alcanzaron el máximo.
+  - `POST /invitaciones/:id/cancelar` (ADMIN): marca la invitación como `REVOCADA`.
+  - **Flujo público** (`/publico/examen`): `GET :token` devuelve batería, candidato y preguntas (sin opciones correctas ni valores); `POST :token/respuestas` guarda respuestas progresivamente (`skipDuplicates`); `POST :token/finalizar` guarda, califica cada aplicación vía `CalificacionService` y marca `COMPLETADA`. `validarToken` rechaza tokens inexistentes, revocados, completados o expirados.
+  - El enlace público es `${FRONTEND_URL}/examen/:token` (variable `FRONTEND_URL`, por defecto `http://localhost:5173`).
+- **Mail** (`src/mail`): `MailService` con `nodemailer`. `obtenerConfigMail()` devuelve `null` si `SMTP_HOST` no está definido (el envío se omite sin romper el flujo); `enviarCorreo()` captura errores y devuelve `boolean`.
+- **Candidatos — importación masiva** (`src/candidatos`): `GET /candidatos/exportar` (CSV), `GET /candidatos/plantilla` (CSV descargable), `POST /candidatos/masivo` (multipart, Excel/CSV con `xlsx`). Resuelve/crea la empresa por nombre, normaliza cédula/email/edad, y reporta filas omitidas. Se agregó `fechaNacimiento` al candidato y la **edad** calculada en `encontrarTodos`, `buscarPorCedula` e `historial`.
+- **Tests**: 101/101 pasando (12 suites: calificación, auth service, auth controller, roles guard, pruebas, candidatos, aplicaciones, reportes, baterías, empresas, invitaciones, mail).
 - **Pendiente**: HTTPS detrás de proxy si se expone a Internet y monitorización/alertas de uptime. Ver el plan priorizado en `PLAN_DE_OPTIMIZACION.md`.
 - **Docker dev/prod (15/08/2026)**: `docker-compose.yml` (desarrollo, hot-reload) y `docker-compose.prod.yml` (producción: imágenes multi-stage compiladas, frontend servido con Nginx, `JWT_SECRET` obligatorio con fail-fast, healthchecks, PostgreSQL solo en red interna, sin volúmenes de `node_modules`). Detalle en `PLAN_DE_OPTIMIZACION.md`.
 - **Seguridad/hardening (16/08/2026)**: `helmet` (CSP off, API JSON) + CORS con `origin` explícito desde `CORS_ORIGIN` (lista separada por coma, por defecto `http://localhost:5173`); rate-limit global `@nestjs/throttler` (60 req/min) y estricto en `/auth/login` (5 intentos / 15 min, HTTP 429); healthchecks en backend y frontend en ambos composes.
 - **Proceso (16/08/2026)**: CI GitHub Actions (`.github/workflows/ci.yml`: backend test+build, frontend build), `Makefile` (up/down/logs/prod/test/backup/restore, sin `-v`) y `backup.sh` (pg_dump + rotación 14 días, para cron).
 
 ## Incidentes resueltos
+
+### 16/08/2026 — Lote de features aplicado (empresas, baterías, invitaciones, examen público, importación masiva, SMTP)
+- **Empresas** y **Baterías**: CRUD completo con controladores, DTOs validados, migraciones Prisma y pantallas frontend (`/baterias`).
+- **Invitaciones + examen público**: enlace por token sin autenticación, expiración, máximo 2 intentos con reintento (borra respuestas/resultados y regenera aplicaciones), cancelación/revocación, envío SMTP opcional y frontend `/invitaciones` + `/examen/:token`.
+- **Importación masiva**: plantilla CSV, importación Excel/CSV y exportación CSV de candidatos; campo `fechaNacimiento` y edad calculada.
+- Tests: se agregaron 40 tests nuevos (baterías, empresas, invitaciones, mail) → **101/101**; builds backend/frontend y compose dev/prod OK.
 
 ### 16/08/2026 — Lote P2/P3 aplicado (healthchecks, hardening, CI, Makefile, backups)
 - **Healthchecks**: dev y prod ahora marcan backend y frontend como healthy (postgres ya lo tenía); `depends_on` con `condition: service_healthy`.

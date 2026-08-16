@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CandidatosService } from './candidatos.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BadRequestException } from '@nestjs/common';
 
 const mockPrismaService = {
   candidato: {
@@ -8,6 +9,11 @@ const mockPrismaService = {
     findMany: jest.fn(),
     findFirst: jest.fn(),
     findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+  empresa: {
+    findMany: jest.fn(),
+    create: jest.fn(),
   },
 };
 
@@ -45,22 +51,39 @@ describe('CandidatosService', () => {
 
       const result = await service.crear(dto);
 
-      expect(prismaService.candidato.create).toHaveBeenCalledWith({ data: dto });
+      expect(prismaService.candidato.create).toHaveBeenCalledWith({
+        data: {
+          nombre: dto.nombre,
+          apellido: dto.apellido,
+          cedula: dto.cedula,
+          email: dto.email,
+          telefono: undefined,
+          cargoPostulado: undefined,
+          fechaNacimiento: null,
+          empresaId: undefined,
+        },
+      });
       expect(result).toEqual(candidato);
     });
   });
 
   describe('encontrarTodos', () => {
-    it('should return candidatos ordered by nombre', async () => {
-      const candidatos = [{ id: 1, nombre: 'Juan' }];
-      (prismaService.candidato.findMany as jest.Mock).mockResolvedValue(candidatos);
+    it('should return candidatos with empresa and edad', async () => {
+      const candidato = {
+        id: 1,
+        nombre: 'Juan',
+        fechaNacimiento: new Date('1990-05-15'),
+        empresa: { nombre: 'Omega' },
+      };
+      (prismaService.candidato.findMany as jest.Mock).mockResolvedValue([candidato]);
 
       const result = await service.encontrarTodos();
 
       expect(prismaService.candidato.findMany).toHaveBeenCalledWith({
+        include: { empresa: true },
         orderBy: { nombre: 'asc' },
       });
-      expect(result).toEqual(candidatos);
+      expect((result as any)[0].edad).toEqual(expect.any(Number));
     });
   });
 
@@ -73,8 +96,9 @@ describe('CandidatosService', () => {
 
       expect(prismaService.candidato.findFirst).toHaveBeenCalledWith({
         where: { cedula: '12345678' },
+        include: { empresa: true },
       });
-      expect(result).toEqual(candidato);
+      expect(result).toEqual({ ...candidato, edad: null });
     });
 
     it('should return null when not found', async () => {
@@ -108,13 +132,28 @@ describe('CandidatosService', () => {
       expect(prismaService.candidato.findUnique).toHaveBeenCalledWith({
         where: { id: 1 },
         include: {
+          empresa: true,
           aplicaciones: {
             include: expect.any(Object),
             orderBy: { fechaInicio: 'desc' },
           },
         },
       });
-      expect(result).toEqual(historial);
+      expect(result).toEqual({ ...historial, edad: null });
+    });
+  });
+
+  describe('importarMasivo', () => {
+    it('should reject unsupported formats', async () => {
+      await expect(
+        service.importarMasivo({ originalname: 'datos.txt', buffer: Buffer.from('') } as Express.Multer.File),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject empty files', async () => {
+      await expect(
+        service.importarMasivo({ originalname: 'datos.csv', buffer: Buffer.from('') } as Express.Multer.File),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

@@ -18,6 +18,10 @@ Sistema para administrar, calificar y analizar pruebas psicométricas para candi
 - Umbrales de clasificación por dimensión y globales
 - Autenticación JWT con roles (Admin, Evaluador)
 - **Frontend completo**: login, dashboard con estadísticas, gestión de candidatos, asistente para aplicar pruebas (4 pasos), panel de resultados con gráficas (Recharts), historial por candidato, reportes con exportación CSV/PDF y administración de usuarios
+- **Empresas**: registro de empresas (con certificado, RUC, dirección, teléfono) asociadas a los candidatos
+- **Baterías de pruebas**: agrupan varias pruebas que se aplican juntas a un candidato
+- **Invitaciones con examen público**: se genera un enlace por token que el candidato abre sin autenticarse (`/examen/:token`), con expiración, máximo 2 intentos, reintento y cancelación por admin; opcionalmente se envía el enlace por **correo SMTP**
+- **Importación masiva de candidatos**: carga desde Excel/CSV con plantilla descargable y exportación CSV del listado; se agrega **fecha de nacimiento** y **edad** calculada
 - **Reportes**: resumen estadístico, exportación CSV (general y por candidato) y **informe PDF** psicométrico por aplicación
 - Diseño responsivo y accesible (Tailwind CSS)
 
@@ -97,6 +101,9 @@ Hay dos archivos de compose con el mismo concepto Docker:
 | `/`           | Dashboard con estadísticas y acciones rápidas                        | Autenticado |
 | `/pruebas`    | Listado de pruebas psicométricas                                     | Autenticado |
 | `/pruebas/:id`| Detalle de una prueba (dimensiones y preguntas)                      | Autenticado |
+| `/baterias`   | Gestión de baterías de pruebas (agrupan varias pruebas)              | Autenticado |
+| `/invitaciones` | Listado y creación de invitaciones con enlace de examen            | Autenticado |
+| `/examen/:token` | Examen público del candidato (sin login, por token)               | Público   |
 | `/candidatos` | Registro, listado y búsqueda de candidatos por cédula                | Autenticado |
 | `/aplicar`    | Asistente para aplicar una prueba (4 pasos)                          | Autenticado |
 | `/resultados` | Resultados por aplicación con gráficas, informe psicométrico y descarga CSV/PDF | Autenticado |
@@ -119,7 +126,26 @@ Hay dos archivos de compose con el mismo concepto Docker:
 - `PATCH /pruebas/:id/estado` - Activa/desactiva una prueba sin reconstruir la estructura (no pierde datos) - solo ADMIN
 - `POST /candidatos` - Registra un candidato
 - `GET /candidatos` - Lista candidatos
+- `GET /candidatos/exportar` - Exporta el listado de candidatos a CSV
+- `GET /candidatos/plantilla` - Descarga la plantilla CSV para importación masiva
+- `POST /candidatos/masivo` - Importa candidatos desde Excel/CSV (multipart `archivo`)
 - `GET /candidatos/buscar/:cedula` - Busca candidato por cédula
+- `GET /empresas` - Lista empresas (con conteo de candidatos)
+- `POST /empresas` - Crea una empresa (solo ADMIN)
+- `PUT /empresas/:id` - Actualiza una empresa (solo ADMIN)
+- `GET /baterias` - Lista baterías de pruebas
+- `GET /baterias/activas` - Lista solo las baterías activas
+- `POST /baterias` - Crea una batería con sus pruebas (solo ADMIN)
+- `PUT /baterias/:id` - Actualiza una batería (solo ADMIN)
+- `DELETE /baterias/:id` - Elimina una batería (solo ADMIN)
+- `GET /invitaciones` - Lista invitaciones con su estado
+- `POST /invitaciones` - Crea una invitación (opcional `enviarCorreo` con SMTP)
+- `GET /invitaciones/:id` - Detalle de una invitación con su enlace
+- `POST /invitaciones/:id/reintentar` - Reintenta (resetea respuestas, máximo 2 intentos) - solo ADMIN
+- `POST /invitaciones/:id/cancelar` - Cancela/revoca una invitación - solo ADMIN
+- `GET /publico/examen/:token` - Obtiene el examen público (sin autenticación)
+- `POST /publico/examen/:token/respuestas` - Guarda respuestas progresivamente (sin autenticación)
+- `POST /publico/examen/:token/finalizar` - Finaliza y califica el examen (sin autenticación)
 - `POST /aplicaciones` - Crea una nueva aplicación de prueba (el evaluador se toma del token JWT; `numeroIntento` se auto-incrementa)
 - `GET /aplicaciones` - Lista aplicaciones (con candidato, prueba y resultados)
 - `GET /aplicaciones/:id` - Obtiene una aplicación con sus resultados
@@ -147,6 +173,8 @@ automáticamente; el backend carga su `.env` con `dotenv` y el seed los usa para
 - `DATABASE_URL`: URL de conexión a PostgreSQL
 - `JWT_SECRET`: secreto para firmar los tokens JWT. **Requerido en producción** (fail-fast: el compose aborta sin él y el backend rechaza el valor por defecto)
 - `CORS_ORIGIN`: origen(es) permitidos para CORS, separados por coma (por defecto `http://localhost:5173`). Si la página se sirve desde otra URL/host, debe estar listada aquí
+- `FRONTEND_URL`: URL pública del frontend (por defecto `http://localhost:5173`); se usa para armar el enlace de invitación `/examen/:token`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`: configuración SMTP para el envío de correos de invitación. Si `SMTP_HOST` no está definido, el envío se omite y `correoEnviado` queda en `false`
 - `PORT`: puerto del backend (por defecto `3000`)
 - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_EVALUADOR_EMAIL`, `SEED_EVALUADOR_PASSWORD`: credenciales de los usuarios iniciales del seed
 
@@ -217,7 +245,7 @@ make logs        # Logs en vivo (desarrollo)
 make prod        # Levantar producción (imágenes compiladas)
 make prod-down   # Apagar producción
 make prod-logs   # Logs en vivo (producción)
-make test        # Tests backend (59/59) + build frontend
+make test        # Tests backend (101/101) + build frontend
 make backup      # Backup de la base a ./backups
 make restore FILE=backups/psicometrico_YYYYMMDD_HHMMSS.sql   # Restaurar un backup
 ```
