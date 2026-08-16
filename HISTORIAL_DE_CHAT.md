@@ -3,6 +3,38 @@
 
 
 
+
+
+## ⚙️ SESIÓN: CRON DE BACKUPS + VALIDACIÓN DE RESTORE EN PRODUCCIÓN - `domingo, 16 de agosto de 2026`
+
+### Objetivo
+Cerrar los dos pendientes reales de backups: (1) el cron nunca estaba programado y (2) nunca se
+había probado un restore de verdad en producción.
+
+### Cambios
+
+**1. Cron de backups (03:30 diario, root):**
+- Instalado en el crontab de root (único usuario con acceso a docker; `server-gea` no está en el grupo docker):
+  `30 3 * * * COMPOSE_FILE=docker-compose.prod.yml /home/server-gea/Documentos/psicometrico/backup.sh >> .../backups/backup.log 2>&1`
+- `backups/` creado; validado el script con el PATH mínimo de cron (`/usr/bin:/bin`) y `COMPOSE_FILE=docker-compose.prod.yml` (2 dumps OK).
+
+**2. Restore validado (sin tocar producción):**
+- Backup manual real: `psicometrico_20260816_094407.sql` (72K, 16 tablas).
+- Restaurado en una BD temporal `psicometrico_restore_test` dentro del contenedor postgres: sin errores,
+  esquema + datos completos (15 tablas de dominio + migraciones).
+- Conteos idénticos a producción: Usuario=2, Candidato=2, Prueba=3.
+- BD temporal eliminada después del chequeo.
+
+**3. Higiene:**
+- `.gitignore`: `backups/` agregado (los dumps de producción no deben subirse a Git).
+- `README.md` y `documentación_tecnica.md`: estado de backups actualizado (cron instalado, restore validado).
+- Commit `3c56c35` `ops: cron de backups instalado y restore validado en producción`.
+
+### Pendiente (único, no bloqueante)
+- HTTPS/TLS detrás de reverse proxy si se expone a Internet + monitorización/alertas de uptime
+  (recomendación de mejora continua, ver `PLAN_DE_OPTIMIZACION.md`).
+
+
 ## ⚙️ SESIÓN: BATERÍAS, EMPRESAS, INVITACIONES (EXAMEN PÚBLICO), IMPORTACIÓN MASIVA Y SMTP + TESTS Y DOCS - `domingo, 16 de agosto de 2026`
 
 ### Objetivo
