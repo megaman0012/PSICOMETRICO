@@ -48,6 +48,12 @@ services:
       SEED_EVALUADOR_EMAIL: ${SEED_EVALUADOR_EMAIL:-evaluador@psicometrico.com}
       SEED_EVALUADOR_PASSWORD: ${SEED_EVALUADOR_PASSWORD:-Evaluador123!}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@psicometrico.com}
     ports:
       - "3021:3000"
     healthcheck:

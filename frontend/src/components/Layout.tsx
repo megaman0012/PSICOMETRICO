@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 const links = [
   { to: '/', label: 'Inicio', end: true },
   { to: '/pruebas', label: 'Pruebas' },
+  { to: '/baterias', label: 'Baterías' },
+  { to: '/invitaciones', label: 'Invitaciones' },
   { to: '/candidatos', label: 'Candidatos' },
   { to: '/aplicar', label: 'Aplicar Prueba' },
   { to: '/resultados', label: 'Resultados' },

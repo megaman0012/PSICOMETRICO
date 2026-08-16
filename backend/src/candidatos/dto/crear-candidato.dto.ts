@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsDateString, IsInt } from 'class-validator';
 
 export class CrearCandidatoDto {
   @IsString()
@@ -20,4 +20,12 @@ export class CrearCandidatoDto {
   @IsOptional()
   @IsString()
   cargoPostulado?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaNacimiento?: string;
+
+  @IsOptional()
+  @IsInt()
+  empresaId?: number;
 }

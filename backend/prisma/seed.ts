@@ -396,6 +396,7 @@ async function main() {
   await prisma.dimension.deleteMany();
   await prisma.prueba.deleteMany();
   await prisma.candidato.deleteMany();
+  await prisma.empresa.deleteMany();
   await prisma.usuario.deleteMany();
 
   console.log("Datos existentes eliminados");
@@ -727,7 +728,24 @@ async function main() {
   console.log(`Aptitudes Cognitivas cargado: ${competencias.length} competencias, ${totalPreguntasAptitudes} preguntas reales`);
 
   // =============================================
-  // 4. CANDIDATO DE EJEMPLO
+  // 4. EMPRESAS DEL GRUPO
+  // =============================================
+  console.log("Creando empresas del grupo...");
+
+  const empresaEjemplo = await prisma.empresa.create({
+    data: {
+      nombre: "Seguridad Omega",
+      activa: true,
+      certificadoTitulo: "Certificado de Evaluación Psicométrica",
+      certificadoTexto:
+        "Se certifica que el candidato completó satisfactoriamente las evaluaciones psicométricas requeridas para el puesto postulado.",
+    },
+  });
+
+  console.log(`Empresa de ejemplo creada (id=${empresaEjemplo.id})`);
+
+  // =============================================
+  // 5. CANDIDATO DE EJEMPLO
   // =============================================
   console.log("Creando candidato de ejemplo...");
 
@@ -739,6 +757,8 @@ async function main() {
       email: "juan.perez@example.com",
       telefono: "+58 412-0000000",
       cargoPostulado: "Guardia de Seguridad",
+      fechaNacimiento: new Date("1990-05-15"),
+      empresaId: empresaEjemplo.id,
     },
   });
 

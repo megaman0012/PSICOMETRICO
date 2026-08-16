@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aplicacionesService, candidatosService, pruebasService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import type { Aplicacion, Candidato, Prueba } from '../types';
+import { mezclarArray } from '../utils/mezclar';
 
 type Respuestas = Record<number, number>;
 
@@ -57,10 +58,20 @@ export default function AplicarPrueba() {
       .catch(() => setError('No se pudieron cargar los datos'));
   }, []);
 
-  const totalPreguntas = aplicacion?.prueba?.dimensiones?.reduce(
-    (acc, d) => acc + (d.preguntas?.length || 0),
-    0,
-  ) || 0;
+  const preguntasPlanas = useMemo(() => {
+    if (!aplicacion?.prueba?.dimensiones) return [];
+    return aplicacion.prueba.dimensiones
+      .flatMap((d) => d.preguntas || [])
+      .map((pregunta) => ({
+        ...pregunta,
+        opciones:
+          pregunta.tipo === 'LIKERT'
+            ? pregunta.opciones
+            : mezclarArray(pregunta.opciones),
+      }));
+  }, [aplicacion]);
+
+  const totalPreguntas = preguntasPlanas.length;
   const respondidas = Object.keys(respuestas).length;
   const tieneLikert =
     aplicacion?.prueba?.dimensiones?.some((d) =>
@@ -217,61 +228,45 @@ export default function AplicarPrueba() {
         {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
 
         <div className="space-y-6">
-          {(() => {
-            let indiceGlobal = 0;
-            return aplicacion?.prueba?.dimensiones?.map((dimension) => (
-              <div key={dimension.id} className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-1">{dimension.nombre}</h2>
-                {dimension.descripcion && (
-                  <p className="text-gray-500 text-sm mb-4">{dimension.descripcion}</p>
-                )}
-                <div className="space-y-4">
-                  {dimension.preguntas?.map((pregunta) => {
-                    const indice = indiceGlobal++;
-                    return (
-                      <div
-                        key={pregunta.id}
-                        ref={(el) => {
-                          contenedoresPreguntas.current[indice] = el;
-                        }}
-                        className="border border-gray-100 rounded-md p-4"
-                      >
-                        <p className="text-sm font-medium text-gray-800 mb-3">
-                          {indice + 1}. {pregunta.enunciado}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {pregunta.opciones?.map((opcion) => {
-                            const etiqueta =
-                              pregunta.tipo === 'LIKERT'
-                                ? LIKERT_ETIQUETAS[Number(opcion.valor)] || opcion.texto
-                                : opcion.texto;
-                            return (
-                              <button
-                                key={opcion.id}
-                                onClick={() =>
-                                  setRespuestas({ ...respuestas, [pregunta.id]: opcion.id })
-                                }
-                                className={`px-3 py-1.5 rounded-md text-sm border ${
-                                  respuestas[pregunta.id] === opcion.id
-                                    ? 'bg-blue-800 text-white border-blue-800'
-                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'
-                                }`}
-                              >
-                                {etiqueta}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          {preguntasPlanas.map((pregunta, indice) => (
+            <div
+              key={pregunta.id}
+              ref={(el) => {
+                contenedoresPreguntas.current[indice] = el;
+              }}
+              className="bg-white rounded-lg shadow p-6"
+            >
+              <p className="text-sm font-medium text-gray-800 mb-3">
+                {indice + 1}. {pregunta.enunciado}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {pregunta.opciones?.map((opcion) => {
+                  const etiqueta =
+                    pregunta.tipo === 'LIKERT'
+                      ? LIKERT_ETIQUETAS[Number(opcion.valor)] || opcion.texto
+                      : opcion.texto;
+                  return (
+                    <button
+                      key={opcion.id}
+                      onClick={() =>
+                        setRespuestas({ ...respuestas, [pregunta.id]: opcion.id })
+                      }
+                      className={`px-3 py-1.5 rounded-md text-sm border ${
+                        respuestas[pregunta.id] === opcion.id
+                          ? 'bg-blue-800 text-white border-blue-800'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'
+                      }`}
+                    >
+                      {etiqueta}
+                    </button>
+                  );
+                })}
               </div>
-            ));
-          })()}
+            </div>
+          ))}
         </div>
 
-        {aplicacion?.prueba?.dimensiones?.length === 0 && (
+        {preguntasPlanas.length === 0 && (
           <p className="text-gray-500">Esta prueba no tiene preguntas registradas.</p>
         )}
 

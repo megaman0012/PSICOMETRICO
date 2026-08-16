@@ -1,5 +1,15 @@
 import axios from 'axios';
-import type { Aplicacion, Candidato, CrearPruebaDto, Prueba, Usuario } from '../types';
+import type {
+  Aplicacion,
+  Bateria,
+  Candidato,
+  CrearPruebaDto,
+  Empresa,
+  ExamenPublico,
+  Invitacion,
+  Prueba,
+  Usuario,
+} from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3021';
 
@@ -78,6 +88,32 @@ export const candidatosService = {
     api.get(`/candidatos/buscar/${cedula}`).then((res) => res.data as Candidato),
   historial: (id: number) =>
     api.get(`/candidatos/${id}/historial`).then((res) => res.data as HistorialCandidato),
+  exportar: () =>
+    descargarArchivo('/candidatos/exportar', `candidatos_${new Date().toISOString().slice(0, 10)}.csv`),
+  plantilla: () => descargarArchivo('/candidatos/plantilla', 'plantilla_candidatos.csv'),
+  masivo: async (archivo: File) => {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE_URL}/candidatos/masivo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const cuerpo = await res.json().catch(() => ({}));
+      throw new Error(cuerpo?.message || `Error al subir archivo (${res.status})`);
+    }
+    return res.json();
+  },
+};
+
+export const empresasService = {
+  listar: () => api.get('/empresas').then((res) => res.data as Empresa[]),
+  crear: (dto: { nombre: string; certificadoTitulo?: string; certificadoTexto?: string }) =>
+    api.post('/empresas', dto).then((res) => res.data as Empresa),
+  actualizar: (id: number, dto: { nombre: string; certificadoTitulo?: string; certificadoTexto?: string }) =>
+    api.put(`/empresas/${id}`, dto).then((res) => res.data as Empresa),
 };
 
 async function descargarArchivo(url: string, nombreArchivo: string) {
@@ -118,6 +154,33 @@ export const aplicacionesService = {
   guardarRespuestas: (id: number, respuestas: { preguntaId: number; opcionId: number }[]) =>
     api.post(`/aplicaciones/${id}/respuestas`, { respuestas }).then((res) => res.data),
   finalizar: (id: number) => api.post(`/aplicaciones/${id}/finalizar`).then((res) => res.data),
+};
+
+export const bateriasService = {
+  listar: () => api.get('/baterias').then((res) => res.data as Bateria[]),
+  listarActivas: () => api.get('/baterias/activas').then((res) => res.data as Bateria[]),
+  crear: (dto: { nombre: string; descripcion?: string; activa?: boolean; empresaId?: number; pruebaIds?: number[] }) =>
+    api.post('/baterias', dto).then((res) => res.data as Bateria),
+  actualizar: (id: number, dto: { nombre: string; descripcion?: string; activa?: boolean; empresaId?: number; pruebaIds?: number[] }) =>
+    api.put(`/baterias/${id}`, dto).then((res) => res.data as Bateria),
+  eliminar: (id: number) => api.delete(`/baterias/${id}`).then((res) => res.data),
+};
+
+export const invitacionesService = {
+  listar: () => api.get('/invitaciones').then((res) => res.data as Invitacion[]),
+  crear: (dto: { candidatoId: number; bateriaId: number; horasExpiracion?: number; enviarCorreo?: boolean }) =>
+    api.post('/invitaciones', dto).then((res) => res.data as Invitacion),
+  detalle: (id: number) => api.get(`/invitaciones/${id}`).then((res) => res.data as Invitacion),
+  reintentar: (id: number) => api.post(`/invitaciones/${id}/reintentar`).then((res) => res.data as Invitacion),
+  cancelar: (id: number) => api.post(`/invitaciones/${id}/cancelar`).then((res) => res.data),
+};
+
+export const examenPublicoService = {
+  obtener: (token: string) => api.get(`/publico/examen/${token}`).then((res) => res.data as ExamenPublico),
+  guardarRespuestas: (token: string, respuestas: { aplicacionId: number; preguntaId: number; opcionId: number }[]) =>
+    api.post(`/publico/examen/${token}/respuestas`, { respuestas }).then((res) => res.data),
+  finalizar: (token: string, respuestas: { aplicacionId: number; preguntaId: number; opcionId: number }[]) =>
+    api.post(`/publico/examen/${token}/finalizar`, { respuestas }).then((res) => res.data),
 };
 
 export const usuariosService = {

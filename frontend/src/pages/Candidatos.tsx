@@ -1,14 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { candidatosService } from '../services/api';
-import type { Candidato } from '../types';
+import { useEffect, useState, type FormEvent, useRef } from 'react';
+import { candidatosService, empresasService } from '../services/api';
+import type { Candidato, Empresa } from '../types';
 
 export default function Candidatos() {
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
   const [cargando, setCargando] = useState(true);
+  const [subiendo, setSubiendo] = useState(false);
+  const inputArchivo = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     nombre: '',
@@ -17,6 +20,8 @@ export default function Candidatos() {
     email: '',
     telefono: '',
     cargoPostulado: '',
+    fechaNacimiento: '',
+    empresaId: '',
   });
 
   const cargar = () => {
@@ -29,6 +34,7 @@ export default function Candidatos() {
 
   useEffect(() => {
     cargar();
+    empresasService.listar().then(setEmpresas).catch(() => {});
   }, []);
 
   const buscar = async () => {
@@ -51,13 +57,50 @@ export default function Candidatos() {
     setError('');
     setExito('');
     try {
-      await candidatosService.crear(form);
+      await candidatosService.crear({
+        ...form,
+        empresaId: form.empresaId ? Number(form.empresaId) : undefined,
+      });
       setExito('Candidato registrado correctamente');
-      setForm({ nombre: '', apellido: '', cedula: '', email: '', telefono: '', cargoPostulado: '' });
+      setForm({
+        nombre: '',
+        apellido: '',
+        cedula: '',
+        email: '',
+        telefono: '',
+        cargoPostulado: '',
+        fechaNacimiento: '',
+        empresaId: '',
+      });
       setMostrarFormulario(false);
       cargar();
     } catch (err: any) {
       setError(err?.response?.data?.message || 'No se pudo registrar el candidato');
+    }
+  };
+
+  const subirArchivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!archivo) return;
+    setSubiendo(true);
+    setError('');
+    setExito('');
+    try {
+      const resultado = await candidatosService.masivo(archivo);
+      let mensaje = `Procesados: ${resultado.procesados} · Creados: ${resultado.creados} · Actualizados: ${resultado.actualizados}`;
+      if (resultado.errores?.length > 0) {
+        mensaje += ` · Errores: ${resultado.errores.length} (primeros: ${resultado.errores
+          .slice(0, 3)
+          .map((er: { fila: number; mensaje: string }) => `fila ${er.fila}: ${er.mensaje}`)
+          .join('; ')})`;
+      }
+      setExito(mensaje);
+      cargar();
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo procesar el archivo');
+    } finally {
+      setSubiendo(false);
     }
   };
 
@@ -70,12 +113,34 @@ export default function Candidatos() {
           <h1 className="text-2xl font-bold text-gray-800">Candidatos</h1>
           <p className="text-gray-500">Registro de aspirantes a guardia de seguridad</p>
         </div>
-        <button
-          onClick={() => setMostrarFormulario(!mostrarFormulario)}
-          className="bg-green-700 text-white px-4 py-2 rounded-md hover:bg-green-600"
-        >
-          {mostrarFormulario ? 'Cancelar' : '+ Nuevo candidato'}
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => candidatosService.exportar().catch(() => setError('No se pudo exportar'))}
+            className="bg-blue-800 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+          >
+            Descargar data
+          </button>
+          <button
+            onClick={() => candidatosService.plantilla().catch(() => setError('No se pudo descargar la plantilla'))}
+            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-500 text-sm"
+          >
+            Plantilla
+          </button>
+          <button
+            onClick={() => inputArchivo.current?.click()}
+            disabled={subiendo}
+            className="bg-indigo-700 text-white px-4 py-2 rounded-md hover:bg-indigo-600 text-sm"
+          >
+            {subiendo ? 'Subiendo...' : 'Subir grupo'}
+          </button>
+          <input ref={inputArchivo} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={subirArchivo} />
+          <button
+            onClick={() => setMostrarFormulario(!mostrarFormulario)}
+            className="bg-green-700 text-white px-4 py-2 rounded-md hover:bg-green-600"
+          >
+            {mostrarFormulario ? 'Cancelar' : '+ Nuevo candidato'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -130,6 +195,30 @@ export default function Candidatos() {
               onChange={(e) => setCampo('cargoPostulado', e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
             />
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fecha de nacimiento</label>
+              <input
+                type="date"
+                value={form.fechaNacimiento}
+                onChange={(e) => setCampo('fechaNacimiento', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Empresa</label>
+              <select
+                value={form.empresaId}
+                onChange={(e) => setCampo('empresaId', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">Sin empresa</option>
+                {empresas.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <button
             type="submit"
@@ -166,6 +255,8 @@ export default function Candidatos() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cédula</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Edad</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Empresa</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cargo</th>
               </tr>
             </thead>
@@ -178,6 +269,8 @@ export default function Candidatos() {
                   <td className="px-4 py-3 text-sm text-gray-600">{c.cedula}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{c.email}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{c.telefono || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{c.edad ?? '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{c.empresa?.nombre || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{c.cargoPostulado || '—'}</td>
                 </tr>
               ))}

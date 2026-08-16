@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  UseGuards,
+  NotFoundException,
+  ParseIntPipe,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { CandidatosService } from './candidatos.service';
 import { CrearCandidatoDto } from './dto/crear-candidato.dto';
 import { Candidato } from '@prisma/client';
@@ -21,6 +35,34 @@ export class CandidatosController {
   @Roles('ADMIN', 'EVALUADOR')
   async encontrarTodos(): Promise<Candidato[]> {
     return this.candidatosService.encontrarTodos();
+  }
+
+  @Get('exportar')
+  @Roles('ADMIN', 'EVALUADOR')
+  async exportar(@Res() res: Response) {
+    const csv = await this.candidatosService.exportarCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="candidatos_${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+    res.send(csv);
+  }
+
+  @Get('plantilla')
+  @Roles('ADMIN', 'EVALUADOR')
+  async plantilla(@Res() res: Response) {
+    const csv = this.candidatosService.plantillaCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla_candidatos.csv"');
+    res.send(csv);
+  }
+
+  @Post('masivo')
+  @Roles('ADMIN', 'EVALUADOR')
+  @UseInterceptors(FileInterceptor('archivo'))
+  async importarMasivo(@UploadedFile() archivo: Express.Multer.File) {
+    return this.candidatosService.importarMasivo(archivo);
   }
 
   @Get('buscar/:cedula')

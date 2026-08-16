@@ -31,6 +31,7 @@ model Prueba {
   resultadosGlobales ResultadoGlobal[]
   umbrales      UmbralClasificacion[]
   aplicaciones  Aplicacion[]
+  bateriaPruebas BateriaPrueba[]
 }
 
 // Modelo para las dimensiones/categorías de las pruebas
@@ -149,6 +150,8 @@ model Aplicacion {
   fechaFin      DateTime?
   numeroIntento Int      @default(1)
   completada    Boolean  @default(false)
+  invitacionId  Int?
+  invitacion    Invitacion? @relation(fields: [invitacionId], references: [id])
   respuestas    Respuesta[]
   resultadosDimension ResultadoDimension[]
   resultadosGlobales ResultadoGlobal[]
@@ -156,6 +159,22 @@ model Aplicacion {
   @@index([candidatoId, pruebaId])
   @@index([pruebaId])
   @@index([usuarioId])
+  @@index([invitacionId])
+}
+
+// Modelo para las empresas del grupo empresarial
+model Empresa {
+  id            Int      @id @default(autoincrement())
+  nombre        String   @unique
+  activa        Boolean  @default(true)
+  fechaCreacion DateTime @default(now())
+  certificadoTitulo String?
+  certificadoTexto  String?
+
+  candidatos  Candidato[]
+  baterias    Bateria[]
+
+  @@index([nombre])
 }
 
 // Modelo para los candidatos
@@ -167,12 +186,75 @@ model Candidato {
   email         String   @unique
   telefono      String?
   cargoPostulado String?
+  fechaNacimiento DateTime?
+  empresaId     Int?
+  empresa       Empresa? @relation(fields: [empresaId], references: [id])
   fechaCreacion DateTime @default(now())
   
   aplicaciones Aplicacion[]
+  invitaciones Invitacion[]
   
   @@index([cedula])
   @@index([email])
+  @@index([empresaId])
+}
+
+// Modelo para las baterías de pruebas (agrupan varias pruebas)
+model Bateria {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  descripcion   String?
+  activa        Boolean  @default(true)
+  empresaId     Int?
+  empresa       Empresa? @relation(fields: [empresaId], references: [id])
+  fechaCreacion DateTime @default(now())
+
+  pruebas       BateriaPrueba[]
+  invitaciones  Invitacion[]
+
+  @@index([empresaId])
+}
+
+// Relación N:M entre baterías y pruebas, con orden
+model BateriaPrueba {
+  id        Int    @id @default(autoincrement())
+  bateriaId Int
+  bateria   Bateria @relation(fields: [bateriaId], references: [id])
+  pruebaId  Int
+  prueba    Prueba @relation(fields: [pruebaId], references: [id])
+  orden     Int    @default(0)
+
+  @@unique([bateriaId, pruebaId])
+  @@index([pruebaId])
+}
+
+// Estado de una invitación de examen
+enum EstadoInvitacion {
+  PENDIENTE
+  COMPLETADA
+  EXPIRADA
+  REVOCADA
+}
+
+// Invitación de examen por link único (no requiere usuario)
+model Invitacion {
+  id              Int      @id @default(autoincrement())
+  token           String   @unique
+  candidatoId     Int
+  candidato       Candidato @relation(fields: [candidatoId], references: [id])
+  bateriaId       Int
+  bateria         Bateria  @relation(fields: [bateriaId], references: [id])
+  estado          EstadoInvitacion @default(PENDIENTE)
+  fechaCreacion   DateTime @default(now())
+  fechaExpiracion DateTime
+  fechaCompletada DateTime?
+  intentos        Int      @default(1)
+
+  aplicaciones Aplicacion[]
+
+  @@index([token])
+  @@index([candidatoId])
+  @@index([bateriaId])
 }
 
 // Modelo para los usuarios del sistema (administradores, evaluadores, etc.)

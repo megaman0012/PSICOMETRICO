@@ -9,6 +9,9 @@ const Pruebas = lazy(() => import('./pages/Pruebas'));
 const PruebaDetalle = lazy(() => import('./pages/PruebaDetalle'));
 const Candidatos = lazy(() => import('./pages/Candidatos'));
 const AplicarPrueba = lazy(() => import('./pages/AplicarPrueba'));
+const Baterias = lazy(() => import('./pages/Baterias'));
+const Invitaciones = lazy(() => import('./pages/Invitaciones'));
+const ExamenPublico = lazy(() => import('./pages/ExamenPublico'));
 const Resultados = lazy(() => import('./pages/Resultados'));
 const Historial = lazy(() => import('./pages/Historial'));
 const Reportes = lazy(() => import('./pages/Reportes'));
@@ -41,6 +44,8 @@ function RutasProtegidas() {
           <Route index element={<Dashboard />} />
           <Route path="pruebas" element={<Pruebas />} />
           <Route path="pruebas/:id" element={<PruebaDetalle />} />
+          <Route path="baterias" element={<Baterias />} />
+          <Route path="invitaciones" element={<Invitaciones />} />
           <Route path="candidatos" element={<Candidatos />} />
           <Route path="aplicar" element={<AplicarPrueba />} />
           <Route path="resultados" element={<Resultados />} />
@@ -67,6 +72,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/examen/:token" element={<ExamenPublico />} />
           <Route path="/*" element={<RutasProtegidas />} />
         </Routes>
       </BrowserRouter>

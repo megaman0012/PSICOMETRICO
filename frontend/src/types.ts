@@ -6,6 +6,16 @@ export interface Usuario {
   fechaCreacion: string;
 }
 
+export interface Empresa {
+  id: number;
+  nombre: string;
+  activa: boolean;
+  fechaCreacion: string;
+  certificadoTitulo?: string | null;
+  certificadoTexto?: string | null;
+  _count?: { candidatos: number };
+}
+
 export interface Candidato {
   id: number;
   nombre: string;
@@ -14,6 +24,10 @@ export interface Candidato {
   email: string;
   telefono?: string | null;
   cargoPostulado?: string | null;
+  fechaNacimiento?: string | null;
+  edad?: number | null;
+  empresaId?: number | null;
+  empresa?: Empresa | null;
   fechaCreacion: string;
 }
 
@@ -119,6 +133,71 @@ export interface ResultadoGlobal {
   clasificacion?: string | null;
   interpretacion?: string | null;
   prueba?: Prueba;
+}
+
+export interface BateriaPrueba {
+  id: number;
+  bateriaId: number;
+  pruebaId: number;
+  orden: number;
+  prueba: Prueba;
+}
+
+export interface Bateria {
+  id: number;
+  nombre: string;
+  descripcion?: string | null;
+  activa: boolean;
+  empresaId?: number | null;
+  empresa?: Empresa | null;
+  fechaCreacion: string;
+  pruebas: BateriaPrueba[];
+  _count?: { invitaciones: number };
+}
+
+export type EstadoInvitacion = 'PENDIENTE' | 'COMPLETADA' | 'EXPIRADA' | 'REVOCADA';
+
+export interface Invitacion {
+  id: number;
+  token: string;
+  candidatoId: number;
+  candidato?: Candidato;
+  bateriaId: number;
+  bateria?: Bateria;
+  estado: EstadoInvitacion;
+  fechaCreacion: string;
+  fechaExpiracion: string;
+  fechaCompletada?: string | null;
+  intentos: number;
+  link?: string;
+  correoEnviado?: boolean;
+  aplicaciones?: Aplicacion[];
+  _count?: { aplicaciones: number };
+}
+
+export interface PreguntaExamen {
+  id: number;
+  enunciado: string;
+  tipo: string;
+  dimensionId?: number | null;
+  opciones: { id: number; texto: string }[];
+}
+
+export interface PruebaExamen {
+  aplicacionId: number | null;
+  pruebaId: number;
+  nombre: string;
+  descripcion?: string | null;
+  preguntas: PreguntaExamen[];
+}
+
+export interface ExamenPublico {
+  token: string;
+  estado: EstadoInvitacion;
+  fechaExpiracion: string;
+  candidato: { nombre: string; apellido: string };
+  bateria: { nombre: string };
+  pruebas: PruebaExamen[];
 }
 
 export interface Aplicacion {

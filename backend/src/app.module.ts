@@ -12,6 +12,10 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { AplicacionesModule } from './aplicaciones/aplicaciones.module';
 import { CalificacionModule } from './calificacion/calificacion.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { EmpresasModule } from './empresas/empresas.module';
+import { BateriasModule } from './baterias/baterias.module';
+import { InvitacionesModule } from './invitaciones/invitaciones.module';
+import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -30,6 +34,10 @@ import { PrismaModule } from './prisma/prisma.module';
     AplicacionesModule,
     CalificacionModule,
     ReportesModule,
+    EmpresasModule,
+    BateriasModule,
+    InvitacionesModule,
+    MailModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
